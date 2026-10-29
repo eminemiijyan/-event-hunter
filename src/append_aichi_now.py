@@ -139,13 +139,26 @@ def main():
     events = json.loads(events_path.read_text(encoding="utf-8"))
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
 
-    links = pickup_links(fetch_html(WEEKEND_URL))
+    try:
+        weekend_html = fetch_html(WEEKEND_URL)
+    except requests.RequestException as exc:
+        print(f"AICHI_NOW skipped: source unavailable after retries: {type(exc).__name__}")
+        return
+
+    links = pickup_links(weekend_html)
     if not links:
         raise RuntimeError("Aichi Nowのピックアップイベントを取得できませんでした。")
 
     pickups = []
+    failed_details = 0
     for url in links:
-        event = parse_detail(fetch_html(url), url)
+        try:
+            detail_html = fetch_html(url)
+        except requests.RequestException as exc:
+            failed_details += 1
+            print(f"AICHI_NOW detail skipped: {type(exc).__name__} {url}")
+            continue
+        event = parse_detail(detail_html, url)
         if event and event["end_date"] >= date.today().isoformat():
             pickups.append(event)
 
@@ -165,7 +178,13 @@ def main():
         "decision_counts": counts,
     })
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
-    print("AICHI_NOW", "links", len(links), "parsed", len(pickups), "added", len(events) - before)
+    print(
+        "AICHI_NOW",
+        "links", len(links),
+        "parsed", len(pickups),
+        "failed_details", failed_details,
+        "added", len(events) - before,
+    )
     print("DONE", len(events), counts, "sources", meta["source_count"])
 
 
