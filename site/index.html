@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>Event Hunter</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#111;background:#f5f5f7}
+*{box-sizing:border-box} body{margin:0}
+header{position:sticky;top:0;z-index:10;background:rgba(245,245,247,.94);backdrop-filter:blur(16px);padding:16px 14px 10px;border-bottom:1px solid #ddd}
+h1{font-size:22px;margin:0 0 10px}.controls{display:flex;gap:8px;overflow-x:auto;padding-bottom:3px}
+button{border:1px solid #ccc;background:white;border-radius:999px;padding:8px 13px;white-space:nowrap;font-size:14px}
+button.active{background:#111;color:white;border-color:#111}
+main{max-width:760px;margin:auto;padding:12px 12px 80px}.status{font-size:13px;color:#666;margin:6px 2px 12px}
+.card{display:block;background:white;border-radius:16px;padding:14px 15px;margin:10px 0;text-decoration:none;color:inherit;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.date{font-size:13px;font-weight:700;margin-bottom:7px}.title{font-size:18px;font-weight:750;line-height:1.35}
+.meta{margin-top:8px;font-size:14px;color:#555;line-height:1.5}.tag{display:inline-block;margin-top:9px;background:#eee;border-radius:999px;padding:4px 9px;font-size:12px}
+.empty{text-align:center;color:#777;padding:44px 8px}footer{color:#777;font-size:12px;text-align:center;padding:20px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Event Hunter</h1>
+  <div class="controls" id="period">
+    <button data-period="weekend" class="active">今週末</button>
+    <button data-period="30">30日</button>
+    <button data-period="all">すべて</button>
+  </div>
+  <div class="controls" id="categories" style="margin-top:8px"></div>
+</header>
+<main>
+  <div class="status" id="status">読み込み中…</div>
+  <div id="events"></div>
+</main>
+<footer id="footer"></footer>
+<script>
+let allEvents=[], period="weekend", category="すべて";
+const pad=n=>String(n).padStart(2,"0");
+const iso=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parse=s=>new Date(`${s}T00:00:00`);
+const fmt=s=>{const d=parse(s); return `${d.getMonth()+1}/${d.getDate()}(${["日","月","火","水","木","金","土"][d.getDay()]})`};
+
+function weekendRange(){
+  const now=new Date(); now.setHours(0,0,0,0);
+  const day=now.getDay();
+  const sat=new Date(now);
+  if(day===0) sat.setDate(now.getDate()-1);
+  else if(day!==6) sat.setDate(now.getDate()+(6-day));
+  const sun=new Date(sat); sun.setDate(sat.getDate()+1);
+  return [iso(sat),iso(sun)];
+}
+function visible(e){
+  const today=iso(new Date());
+  if(e.end_date<today) return false;
+  if(category!=="すべて" && e.category!==category) return false;
+  if(period==="all") return true;
+  if(period==="30"){
+    const end=new Date(); end.setDate(end.getDate()+30);
+    return e.start_date<=iso(end);
+  }
+  const [sat,sun]=weekendRange();
+  return e.end_date>=sat && e.start_date<=sun;
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function render(){
+  const list=allEvents.filter(visible).sort((a,b)=>a.start_date.localeCompare(b.start_date)||a.title.localeCompare(b.title));
+  document.querySelector("#status").textContent=`${list.length}件表示`;
+  const box=document.querySelector("#events");
+  box.innerHTML=list.length?list.map(e=>{
+    const date=e.start_date===e.end_date?fmt(e.start_date):`${fmt(e.start_date)}〜${fmt(e.end_date)}`;
+    return `<a class="card" href="${escapeHtml(e.official_url)}" target="_blank" rel="noopener">
+      <div class="date">${date}</div>
+      <div class="title">${escapeHtml(e.title)}</div>
+      <div class="meta">${escapeHtml(e.venue)}<br>${escapeHtml(e.prefecture)} / ${escapeHtml(e.source)}</div>
+      <span class="tag">${escapeHtml(e.category)}</span>
+    </a>`;
+  }).join(""):`<div class="empty">該当イベントはありません</div>`;
+}
+async function init(){
+  const [ev,meta]=await Promise.all([fetch("./events.json"),fetch("./meta.json")]);
+  allEvents=await ev.json(); const m=await meta.json();
+  const cats=["すべて",...new Set(allEvents.map(e=>e.category))];
+  const cbox=document.querySelector("#categories");
+  cbox.innerHTML=cats.map((c,i)=>`<button data-cat="${escapeHtml(c)}" class="${i===0?"active":""}">${escapeHtml(c)}</button>`).join("");
+  cbox.onclick=e=>{
+    if(!e.target.dataset.cat)return;
+    category=e.target.dataset.cat;
+    [...cbox.children].forEach(b=>b.classList.toggle("active",b.dataset.cat===category));
+    render();
+  };
+  document.querySelector("#period").onclick=e=>{
+    if(!e.target.dataset.period)return;
+    period=e.target.dataset.period;
+    [...document.querySelector("#period").children].forEach(b=>b.classList.toggle("active",b.dataset.period===period));
+    render();
+  };
+  document.querySelector("#footer").textContent=`最終更新 ${m.updated_at} / 情報源 ${m.source_count}`;
+  render();
+}
+init().catch(err=>{
+  document.querySelector("#status").textContent="読み込みに失敗しました";
+  document.querySelector("#events").innerHTML=`<div class="empty">${escapeHtml(err.message)}</div>`;
+});
+</script>
+</body>
+</html>
