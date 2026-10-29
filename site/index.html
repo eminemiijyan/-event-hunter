@@ -14,15 +14,19 @@ button{border:1px solid #ccc;background:white;border-radius:999px;padding:8px 13
 button.active{background:#111;color:white;border-color:#111}
 main{max-width:760px;margin:auto;padding:12px 12px 80px}.status{font-size:13px;color:#666;margin:6px 2px 12px}
 .card{display:block;background:white;border-radius:16px;padding:14px 15px;margin:10px 0;text-decoration:none;color:inherit;box-shadow:0 1px 4px rgba(0,0,0,.08)}
-.date{font-size:13px;font-weight:700;margin-bottom:7px}.title{font-size:18px;font-weight:750;line-height:1.35}
-.meta{margin-top:8px;font-size:14px;color:#555;line-height:1.5}.tag{display:inline-block;margin-top:9px;background:#eee;border-radius:999px;padding:4px 9px;font-size:12px}
-.empty{text-align:center;color:#777;padding:44px 8px}footer{color:#777;font-size:12px;text-align:center;padding:20px}
+.card.hold{opacity:.8}.date{font-size:13px;font-weight:700;margin-bottom:7px}.title{font-size:18px;font-weight:750;line-height:1.35}
+.meta{margin-top:8px;font-size:14px;color:#555;line-height:1.5}.tag{display:inline-block;margin-top:9px;margin-right:5px;background:#eee;border-radius:999px;padding:4px 9px;font-size:12px}
+.tag.hold{background:#fff3cd}.empty{text-align:center;color:#777;padding:44px 8px}footer{color:#777;font-size:12px;text-align:center;padding:20px}
 </style>
 </head>
 <body>
 <header>
   <h1>Event Hunter</h1>
-  <div class="controls" id="period">
+  <div class="controls" id="decision">
+    <button data-decision="display" class="active">おすすめ</button>
+    <button data-decision="review">保留も見る</button>
+  </div>
+  <div class="controls" id="period" style="margin-top:8px">
     <button data-period="weekend" class="active">今週末</button>
     <button data-period="30">30日</button>
     <button data-period="all">すべて</button>
@@ -35,7 +39,7 @@ main{max-width:760px;margin:auto;padding:12px 12px 80px}.status{font-size:13px;c
 </main>
 <footer id="footer"></footer>
 <script>
-let allEvents=[], period="weekend", category="すべて";
+let allEvents=[], period="weekend", category="すべて", decisionMode="display";
 const pad=n=>String(n).padStart(2,"0");
 const iso=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const parse=s=>new Date(`${s}T00:00:00`);
@@ -53,6 +57,8 @@ function weekendRange(){
 function visible(e){
   const today=iso(new Date());
   if(e.end_date<today) return false;
+  if(e.decision==="exclude") return false;
+  if(decisionMode==="display" && e.decision!=="display") return false;
   if(category!=="すべて" && e.category!==category) return false;
   if(period==="all") return true;
   if(period==="30"){
@@ -67,22 +73,24 @@ function escapeHtml(s){
 }
 function render(){
   const list=allEvents.filter(visible).sort((a,b)=>a.start_date.localeCompare(b.start_date)||a.title.localeCompare(b.title));
-  document.querySelector("#status").textContent=`${list.length}件表示`;
+  const held=allEvents.filter(e=>e.decision==="hold").length;
+  document.querySelector("#status").textContent=`${list.length}件表示${decisionMode==="display"&&held?` / 保留 ${held}件`:""}`;
   const box=document.querySelector("#events");
   box.innerHTML=list.length?list.map(e=>{
     const date=e.start_date===e.end_date?fmt(e.start_date):`${fmt(e.start_date)}〜${fmt(e.end_date)}`;
-    return `<a class="card" href="${escapeHtml(e.official_url)}" target="_blank" rel="noopener">
+    const holdTag=e.decision==="hold"?`<span class="tag hold" title="${escapeHtml(e.decision_reason||"")}">保留</span>`:"";
+    return `<a class="card ${e.decision==="hold"?"hold":""}" href="${escapeHtml(e.official_url)}" target="_blank" rel="noopener">
       <div class="date">${date}</div>
       <div class="title">${escapeHtml(e.title)}</div>
       <div class="meta">${escapeHtml(e.venue)}<br>${escapeHtml(e.prefecture)} / ${escapeHtml(e.source)}</div>
-      <span class="tag">${escapeHtml(e.category)}</span>
+      <span class="tag">${escapeHtml(e.category)}</span>${holdTag}
     </a>`;
   }).join(""):`<div class="empty">該当イベントはありません</div>`;
 }
 async function init(){
   const [ev,meta]=await Promise.all([fetch("./events.json"),fetch("./meta.json")]);
   allEvents=await ev.json(); const m=await meta.json();
-  const cats=["すべて",...new Set(allEvents.map(e=>e.category))];
+  const cats=["すべて",...new Set(allEvents.filter(e=>e.decision!=="exclude").map(e=>e.category))];
   const cbox=document.querySelector("#categories");
   cbox.innerHTML=cats.map((c,i)=>`<button data-cat="${escapeHtml(c)}" class="${i===0?"active":""}">${escapeHtml(c)}</button>`).join("");
   cbox.onclick=e=>{
@@ -97,7 +105,14 @@ async function init(){
     [...document.querySelector("#period").children].forEach(b=>b.classList.toggle("active",b.dataset.period===period));
     render();
   };
-  document.querySelector("#footer").textContent=`最終更新 ${m.updated_at} / 情報源 ${m.source_count}`;
+  document.querySelector("#decision").onclick=e=>{
+    if(!e.target.dataset.decision)return;
+    decisionMode=e.target.dataset.decision;
+    [...document.querySelector("#decision").children].forEach(b=>b.classList.toggle("active",b.dataset.decision===decisionMode));
+    render();
+  };
+  const counts=m.decision_counts||{};
+  document.querySelector("#footer").textContent=`最終更新 ${m.updated_at} / 情報源 ${m.source_count} / おすすめ ${counts.display??"-"}・保留 ${counts.hold??"-"}・除外 ${counts.exclude??"-"}`;
   render();
 }
 init().catch(err=>{
