@@ -1,0 +1,36 @@
+name: Probe Port Messe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/portmesse-probe.yml'
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install parser
+        run: pip install beautifulsoup4
+      - name: Inspect upcoming event structure
+        shell: python
+        run: |
+          import urllib.request
+          from bs4 import BeautifulSoup
+          url='https://portmesse.com/events/upcoming'
+          req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0'})
+          html=urllib.request.urlopen(req,timeout=30).read().decode('utf-8','replace')
+          print('bytes',len(html))
+          soup=BeautifulSoup(html,'html.parser')
+          for needle in ['第1回 中部食品産業創造展','メッセナゴヤ2026','建設技術フェア2026in中部']:
+              node=soup.find(string=lambda s: s and needle in s)
+              print('\nNEEDLE',needle,'FOUND',bool(node))
+              if node:
+                  p=node.parent
+                  for level in range(8):
+                      if p is None: break
+                      print('LEVEL',level,'TAG',p.name,'CLASS',p.get('class'),'ID',p.get('id'))
+                      print(' '.join(p.stripped_strings)[:1800])
+                      print('LINKS',[(a.get_text(' ',strip=True),a.get('href')) for a in p.find_all('a',href=True)][:10])
+                      p=p.parent
