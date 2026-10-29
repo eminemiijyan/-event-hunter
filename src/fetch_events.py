@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import urljoin
@@ -30,6 +30,46 @@ CATEGORIES = {
     "展示会",
 }
 
+EXCLUDE_WORDS = (
+    "プライベートイベント",
+    "招待者限定",
+    "招待制",
+    "関係者限定",
+    "関係者のみ",
+    "一般入場不可",
+    "一般非公開",
+    "社内イベント",
+    "企業内イベント",
+)
+
+HOLD_WORDS = (
+    "ファミリーセール",
+    "こども大会",
+    "子ども大会",
+    "キッズ大会",
+)
+
+DISPLAY_CATEGORIES = {
+    "展示会",
+    "コンサート・ショー",
+    "スポーツ",
+    "ゲーム",
+}
+
+DISPLAY_WORDS = (
+    "フェス",
+    "フェア",
+    "EXPO",
+    "エキスポ",
+    "展示会",
+    "モーターショー",
+    "キャンピングカー",
+    "コンサート",
+    "ライブ",
+    "ショー",
+)
+
+
 @dataclass(frozen=True)
 class Event:
     title: str
@@ -40,6 +80,49 @@ class Event:
     category: str
     source: str
     official_url: str
+    decision: str = "hold"
+    decision_reason: str = "未判定"
+
+
+def classify_event(event: Event) -> Event:
+    title = event.title.strip()
+
+    matched = next((word for word in EXCLUDE_WORDS if word in title), None)
+    if matched:
+        return replace(
+            event,
+            decision="exclude",
+            decision_reason=f"一般向けでない可能性が高い語: {matched}",
+        )
+
+    matched = next((word for word in HOLD_WORDS if word in title), None)
+    if matched:
+        return replace(
+            event,
+            decision="hold",
+            decision_reason=f"規模・一般的なお出かけ価値を名前だけでは判断しにくい: {matched}",
+        )
+
+    if event.category in DISPLAY_CATEGORIES:
+        return replace(
+            event,
+            decision="display",
+            decision_reason=f"目的対象ジャンル: {event.category}",
+        )
+
+    matched = next((word for word in DISPLAY_WORDS if word.casefold() in title.casefold()), None)
+    if matched:
+        return replace(
+            event,
+            decision="display",
+            decision_reason=f"大型・一般向けイベントを示す語: {matched}",
+        )
+
+    return replace(
+        event,
+        decision="hold",
+        decision_reason="名前とジャンルだけでは大型・一般向けか判断できない",
+    )
 
 
 def month_keys(start: date, count: int = 6):
@@ -58,7 +141,7 @@ def fetch_html(url: str) -> str:
         timeout=30,
         headers={
             "User-Agent": (
-                "Mozilla/5.0 (compatible; EventHunterPersonal/0.2; "
+                "Mozilla/5.0 (compatible; EventHunterPersonal/0.3; "
                 "+https://github.com/)"
             )
         },
@@ -132,7 +215,7 @@ def _extract_from_card(card, source_url: str):
             break
 
     start, end = parts
-    return Event(
+    event = Event(
         title=title,
         start_date=start,
         end_date=end,
@@ -142,6 +225,7 @@ def _extract_from_card(card, source_url: str):
         source="Aichi Sky Expo",
         official_url=official,
     )
+    return classify_event(event)
 
 
 def _fallback_parse(soup: BeautifulSoup, source_url: str):
@@ -172,7 +256,7 @@ def _fallback_parse(soup: BeautifulSoup, source_url: str):
             ):
                 title = s
         if title and category and venue:
-            events.append(Event(
+            event = Event(
                 title=title,
                 start_date=start,
                 end_date=end,
@@ -181,7 +265,8 @@ def _fallback_parse(soup: BeautifulSoup, source_url: str):
                 category=category,
                 source="Aichi Sky Expo",
                 official_url=source_url,
-            ))
+            )
+            events.append(classify_event(event))
     return events
 
 
@@ -215,10 +300,17 @@ def build_site(events: list[Event]):
         json.dumps(payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+    counts = {
+        "display": sum(e.decision == "display" for e in events),
+        "hold": sum(e.decision == "hold" for e in events),
+        "exclude": sum(e.decision == "exclude" for e in events),
+    }
     meta = {
         "updated_at": datetime.now().astimezone().isoformat(timespec="minutes"),
         "source_count": 1,
         "event_count": len(events),
+        "decision_counts": counts,
     }
     (SITE_DIR / "meta.json").write_text(
         json.dumps(meta, ensure_ascii=False, indent=2),
@@ -250,7 +342,12 @@ def main():
         raise RuntimeError("0件でした。サイト構造変更の可能性があります。")
 
     build_site(events)
-    print("DONE", len(events))
+    counts = {
+        "display": sum(e.decision == "display" for e in events),
+        "hold": sum(e.decision == "hold" for e in events),
+        "exclude": sum(e.decision == "exclude" for e in events),
+    }
+    print("DONE", len(events), counts)
 
 
 if __name__ == "__main__":
