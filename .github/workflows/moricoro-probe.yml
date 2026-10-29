@@ -13,24 +13,28 @@ jobs:
     steps:
       - name: Install parser
         run: pip install beautifulsoup4 requests
-      - name: Inspect Moricoro event blocks
+      - name: Inspect Moricoro source
         shell: python
         run: |
-          import requests
+          import re, requests
           from bs4 import BeautifulSoup
           url='https://www.aichi-koen.com/moricoro/moricoro_event/'
-          r=requests.get(url,timeout=30,headers={'User-Agent':'Mozilla/5.0'})
+          headers={
+            'User-Agent':'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1',
+            'Accept-Language':'ja-JP,ja;q=0.9,en;q=0.8',
+            'Referer':'https://www.aichi-koen.com/moricoro/'
+          }
+          r=requests.get(url,timeout=30,headers=headers)
+          print('status',r.status_code,'bytes',len(r.content),'ctype',r.headers.get('content-type'))
           r.raise_for_status()
           r.encoding=r.apparent_encoding
-          soup=BeautifulSoup(r.text,'html.parser')
-          for needle in ['長久手市商工会まつり','あいちサトラボ収穫祭','モリコロパーク秋まつり']:
-              node=soup.find(string=lambda s: s and needle in s)
-              print('\nNEEDLE',needle,'FOUND',bool(node))
-              if not node: continue
-              p=node.parent
-              for level in range(8):
-                  if p is None: break
-                  print('LEVEL',level,'TAG',p.name,'CLASS',p.get('class'),'ID',p.get('id'))
-                  print('TEXT',' '.join(p.stripped_strings)[:1800])
-                  print('LINKS',[(a.get_text(' ',strip=True),a.get('href')) for a in p.find_all('a',href=True)][:12])
-                  p=p.parent
+          html=r.text
+          soup=BeautifulSoup(html,'html.parser')
+          print('title',soup.title.get_text(' ',strip=True) if soup.title else None)
+          print('h3_count',len(soup.find_all('h3')))
+          print('h3_sample',[h.get_text(' ',strip=True) for h in soup.find_all('h3')[:30]])
+          print('contains_event_words', {x:(x in html) for x in ['長久手市商工会まつり','あいちサトラボ収穫祭','モリコロパーク秋まつり','2026-11-08','2026-11-23']})
+          print('scripts', [s.get('src') for s in soup.find_all('script',src=True)][-30:])
+          print('wp_json', sorted(set(re.findall(r'https?://[^\"\']*wp-json[^\"\']*', html)))[:20])
+          print('ajax_refs', [line.strip()[:500] for line in html.splitlines() if 'ajax' in line.lower()][:20])
+          print('event_refs', [line.strip()[:500] for line in html.splitlines() if 'event' in line.lower()][:30])
