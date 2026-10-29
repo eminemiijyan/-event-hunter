@@ -36,12 +36,16 @@ jobs:
         run: |
           PYTHONPATH=. python tests/test_parser.py
           PYTHONPATH=. python tests/test_aichi_now.py
+          PYTHONPATH=. python tests/test_nagoya_info.py
 
       - name: Fetch core events
         run: python src/fetch_events.py
 
       - name: Add Aichi Now pickups
         run: python src/append_aichi_now.py
+
+      - name: Add Nagoya Concierge city events
+        run: python src/append_nagoya_info.py
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
