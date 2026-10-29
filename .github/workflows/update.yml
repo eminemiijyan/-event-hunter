@@ -45,7 +45,7 @@ jobs:
         run: python src/append_aichi_now.py
 
       - name: Add Nagoya Concierge city events
-        run: python src/append_nagoya_info.py
+        run: PYTHONPATH=. python src/append_nagoya_info.py
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
