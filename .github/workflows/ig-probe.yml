@@ -11,6 +11,9 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
+      - name: Install parser dependency
+        run: pip install beautifulsoup4
+
       - name: Inspect Kyodo Tokai event page
         shell: python
         run: |
