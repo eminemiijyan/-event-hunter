@@ -1,4 +1,4 @@
-from src.fetch_events import Event, classify_event, parse_events, parse_ig_api
+from src.fetch_events import Event, classify_event, parse_events, parse_ig_api, parse_kyodo_events
 
 SAMPLE = """
 <html><body>
@@ -84,5 +84,42 @@ assert ig_events[1].decision == "display"
 assert ig_events[2].start_date == "2026-11-13"
 assert ig_events[2].end_date == "2026-11-14"
 assert ig_events[2].source == "IGアリーナ"
+
+KYODO_SAMPLE = """
+<div class="eventlistbox">
+  <dl>
+    <dt>【公演名 / アーティスト名】 <a class="alink" href="/events/detail/3693">&amp;TEAM</a>
+    【公演日】 2026年11月09日（月） 【開場 / 開演】 16:30 / 17:30</dt>
+    <dd>【会場名】 愛知県芸術劇場 大ホール 【料金】 指定席 16,500円</dd>
+  </dl>
+  <dl>
+    <dt>【公演名 / アーティスト名】 <a class="alink" href="/events/detail/9998">小規模ライブ</a>
+    【公演日】 2026年11月10日（火） 【開場 / 開演】 18:00 / 19:00</dt>
+    <dd>【会場名】 HeartLand 【料金】 全自由 4,000円</dd>
+  </dl>
+  <dl>
+    <dt>【公演名 / アーティスト名】 <a class="alink" href="/events/detail/9999">県外公演</a>
+    【公演日】 2026年11月11日（水） 【開場 / 開演】 18:00 / 19:00</dt>
+    <dd>【会場名】 三重県文化会館 大ホール 【料金】 指定席 8,000円</dd>
+  </dl>
+  <dl>
+    <dt>【公演名 / アーティスト名】 <a class="alink" href="/events/detail/9997">【中止】テスト公演</a>
+    【公演日】 2026年11月12日（木） 【開場 / 開演】 18:00 / 19:00</dt>
+    <dd>【会場名】 Zepp Nagoya 【料金】 指定席 8,000円</dd>
+  </dl>
+</div>
+"""
+
+kyodo_events = parse_kyodo_events(KYODO_SAMPLE)
+assert len(kyodo_events) == 3, kyodo_events
+assert kyodo_events[0].title == "&TEAM"
+assert kyodo_events[0].start_date == "2026-11-09"
+assert kyodo_events[0].venue == "愛知県芸術劇場 大ホール"
+assert kyodo_events[0].decision == "display"
+assert kyodo_events[0].official_url == "https://www.kyodotokai.co.jp/events/detail/3693"
+assert kyodo_events[1].venue == "HeartLand"
+assert kyodo_events[1].decision == "hold"
+assert kyodo_events[2].decision == "exclude"
+assert all(e.venue != "三重県文化会館 大ホール" for e in kyodo_events)
 
 print("PASS")
