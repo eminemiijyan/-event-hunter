@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import unicodedata
 from datetime import date, datetime
 from pathlib import Path
@@ -16,12 +17,26 @@ SITE_DIR = Path(__file__).resolve().parents[1] / "site"
 JP_DATE_RE = re.compile(r"(?:(?P<year>\d{4})年)?(?P<month>\d{1,2})月(?P<day>\d{1,2})日")
 
 
-def fetch_html(url: str) -> str:
-    r = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0 (compatible; EventHunterPersonal/0.6)"})
-    r.raise_for_status()
-    if not r.encoding or r.encoding.lower() == "iso-8859-1":
-        r.encoding = r.apparent_encoding
-    return r.text
+def fetch_html(url: str, attempts: int = 3) -> str:
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            r = requests.get(
+                url,
+                timeout=(10, 45),
+                headers={"User-Agent": "Mozilla/5.0 (compatible; EventHunterPersonal/0.6)"},
+            )
+            r.raise_for_status()
+            if not r.encoding or r.encoding.lower() == "iso-8859-1":
+                r.encoding = r.apparent_encoding
+            return r.text
+        except (requests.Timeout, requests.ConnectionError) as exc:
+            last_error = exc
+            print(f"AICHI_NOW retry {attempt}/{attempts}: {type(exc).__name__} {url}")
+            if attempt < attempts:
+                time.sleep(attempt * 2)
+    assert last_error is not None
+    raise last_error
 
 
 def pickup_links(page_html: str) -> list[str]:
