@@ -11,21 +11,25 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Test direct month URLs
+      - name: Install parser
+        run: pip install beautifulsoup4
+      - name: Inspect monthly event blocks
         shell: python
         run: |
           import urllib.request
-          urls=[
-            'https://portmesse.com/events/upcoming?cid=mc_mini_widget-3&month=11&time=month&yr=2026',
-            'https://portmesse.com/events?cid=mc_mini_widget-3&month=11&time=month&yr=2026',
-            'https://portmesse.com/events?month=11&yr=2026&time=month',
-          ]
-          needles=['第1回 中部食品産業創造展','メッセナゴヤ2026','建設技術フェア2026in中部']
-          for url in urls:
-              req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0'})
-              html=urllib.request.urlopen(req,timeout=30).read().decode('utf-8','replace')
-              print('\nURL',url,'bytes',len(html))
-              for n in needles:
-                  print(n, n in html)
-              for marker in ['mc_mini_widget-3','mc-events','calendar-event','data-event']:
-                  print(marker,html.lower().count(marker.lower()))
+          from bs4 import BeautifulSoup
+          url='https://portmesse.com/events?month=11&yr=2026&time=month'
+          req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0'})
+          html=urllib.request.urlopen(req,timeout=30).read().decode('utf-8','replace')
+          soup=BeautifulSoup(html,'html.parser')
+          for needle in ['第1回 中部食品産業創造展','メッセナゴヤ2026','建設技術フェア2026in中部']:
+              node=soup.find(string=lambda s: s and needle in s)
+              print('\nNEEDLE',needle,'FOUND',bool(node))
+              if not node: continue
+              p=node.parent
+              for level in range(7):
+                  if p is None: break
+                  print('LEVEL',level,'TAG',p.name,'CLASS',p.get('class'),'ID',p.get('id'))
+                  print('TEXT',' '.join(p.stripped_strings)[:1800])
+                  print('LINKS',[(a.get_text(' ',strip=True),a.get('href')) for a in p.find_all('a',href=True)][:12])
+                  p=p.parent
