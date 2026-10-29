@@ -11,24 +11,35 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe official pages
+      - name: Probe official pages and JS chunks
         shell: python
         run: |
           import re, urllib.request
-          from html import unescape
-          for url in ['https://www.ig-arena.jp/', 'https://www.ig-arena.jp/events/']:
-              print('\nURL', url)
+          from urllib.parse import urljoin
+
+          def get(url):
               req = urllib.request.Request(url, headers={'User-Agent':'Mozilla/5.0'})
-              data = urllib.request.urlopen(req, timeout=30).read().decode('utf-8','replace')
-              print('bytes', len(data))
-              print('contains HOSHIMACHI', 'HOSHIMACHI' in data)
-              print('contains 2026 11.7', '11.7' in data or '11.07' in data)
+              return urllib.request.urlopen(req, timeout=30).read().decode('utf-8','replace')
+
+          for page_url in ['https://www.ig-arena.jp/', 'https://www.ig-arena.jp/events/']:
+              print('\nPAGE', page_url)
+              data = get(page_url)
               scripts = re.findall(r'<script[^>]+src=["\']([^"\']+)', data, re.I)
-              print('scripts')
-              for s in scripts[-20:]: print(' ', s)
-              print('event/api-like URLs')
-              urls = sorted(set(re.findall(r'https?://[^"\'<> ]+', data)))
-              for u in urls:
-                  lu=u.lower()
-                  if 'event' in lu or 'api' in lu:
-                      print(' ', unescape(u)[:300])
+              print('scripts', len(scripts))
+              for src in scripts:
+                  if 'app/' not in src and '9972-' not in src and '7661-' not in src and '2326-' not in src:
+                      continue
+                  js_url = urljoin(page_url, src)
+                  print('\nCHUNK', js_url)
+                  js = get(js_url)
+                  print('bytes', len(js))
+                  for needle in ['strapi', '/api/', 'events?', 'events/', 'populate', 'sacred-star']:
+                      if needle.lower() in js.lower():
+                          print('FOUND', needle)
+                  hits = sorted(set(re.findall(r'https?://[^"\'<>` ]+', js)))
+                  for u in hits:
+                      lu = u.lower()
+                      if 'strapi' in lu or '/api/' in lu or 'event' in lu:
+                          print('URL', u[:500])
+                  for m in re.finditer(r'.{0,180}(?:strapi|/api/|events\?|populate).{0,300}', js, re.I):
+                      print('CTX', m.group(0)[:700])
