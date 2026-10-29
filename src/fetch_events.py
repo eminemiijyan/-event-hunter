@@ -15,6 +15,8 @@ SKY_LIST_URL = SKY_BASE + "/ase-event/?ym={ym}"
 IG_BASE = "https://www.ig-arena.jp"
 IG_API_URL = IG_BASE + "/api/events/month?month={ym}"
 IG_EVENT_URL = IG_BASE + "/events/{event_id}/"
+KYODO_BASE = "https://www.kyodotokai.co.jp"
+KYODO_LIST_URL = KYODO_BASE + "/events/index/"
 SITE_DIR = Path(__file__).resolve().parents[1] / "site"
 
 SKY_DATE_RE = re.compile(
@@ -30,7 +32,7 @@ CATEGORIES = {
 }
 EXCLUDE_WORDS = (
     "プライベートイベント", "招待者限定", "招待制", "関係者限定", "関係者のみ",
-    "一般入場不可", "一般非公開", "社内イベント", "企業内イベント",
+    "一般入場不可", "一般非公開", "社内イベント", "企業内イベント", "【中止】", "公演中止",
 )
 HOLD_WORDS = ("ファミリーセール", "こども大会", "子ども大会", "キッズ大会")
 DISPLAY_CATEGORIES = {"展示会", "コンサート・ショー", "スポーツ", "ゲーム"}
@@ -40,6 +42,23 @@ DISPLAY_WORDS = (
 )
 SPORT_WORDS = ("B.LEAGUE", "リーグ戦", " vs ", "大相撲", "競技大会", "パラ競技大会")
 CONCERT_WORDS = ("TOUR", "ツアー", "LIVE", "ライブ", "コンサート", "Anniversary")
+
+KYODO_AICHI_VENUE_HINTS = (
+    "愛知", "名古屋", "豊橋", "岡崎", "豊田", "一宮", "刈谷", "常滑", "長久手", "小牧", "春日井",
+    "安城", "半田", "蒲郡", "豊川", "瀬戸", "稲沢", "東海市", "知多", "日進", "大府", "知立",
+    "犬山", "江南", "クロコくんホール", "COMTEC PORTBASE", "HeartLand", "DIAMOND HALL",
+    "ダイアモンドホール", "ElectricLadyLand", "ell.FITS ALL", "CLUB QUATTRO", "ボトムライン",
+    "BOTTOM LINE", "SPADE BOX", "ReNY limited",
+)
+
+KYODO_LARGE_VENUE_HINTS = (
+    "IGアリーナ", "バンテリンドーム", "クロコくんホール", "日本ガイシホール", "愛知県芸術劇場",
+    "Niterra", "日本特殊陶業市民会館", "岡谷鋼機名古屋公会堂", "Zepp Nagoya", "COMTEC PORTBASE",
+    "センチュリーホール", "名古屋国際会議場", "名古屋市公会堂", "刈谷市総合文化センター",
+    "豊田市民文化会館", "アイプラザ豊橋", "穂の国とよはし芸術劇場", "豊橋市民文化会館",
+    "一宮市民会館",
+)
+
 
 @dataclass(frozen=True)
 class Event:
@@ -59,7 +78,7 @@ def classify_event(event: Event) -> Event:
     title = event.title.strip()
     matched = next((word for word in EXCLUDE_WORDS if word in title), None)
     if matched:
-        return replace(event, decision="exclude", decision_reason=f"一般向けでない可能性が高い語: {matched}")
+        return replace(event, decision="exclude", decision_reason=f"一般向けでない、または中止を示す語: {matched}")
     matched = next((word for word in HOLD_WORDS if word in title), None)
     if matched:
         return replace(event, decision="hold", decision_reason=f"規模・一般的なお出かけ価値を名前だけでは判断しにくい: {matched}")
@@ -92,7 +111,7 @@ def month_keys_dash(start: date, count: int = 6):
 
 
 def fetch_html(url: str) -> str:
-    r = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0 (compatible; EventHunterPersonal/0.4)"})
+    r = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0 (compatible; EventHunterPersonal/0.5)"})
     r.raise_for_status()
     if not r.encoding or r.encoding.lower() == "iso-8859-1":
         r.encoding = r.apparent_encoding
@@ -100,7 +119,7 @@ def fetch_html(url: str) -> str:
 
 
 def fetch_json(url: str) -> dict:
-    r = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0 (compatible; EventHunterPersonal/0.4)"})
+    r = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0 (compatible; EventHunterPersonal/0.5)"})
     r.raise_for_status()
     return r.json()
 
@@ -237,6 +256,53 @@ def parse_ig_api(payload: dict, month_key: str):
     return list(unique.values())
 
 
+def _kyodo_is_aichi_venue(venue: str) -> bool:
+    folded = venue.casefold()
+    return any(hint.casefold() in folded for hint in KYODO_AICHI_VENUE_HINTS)
+
+
+def _kyodo_is_large_venue(venue: str) -> bool:
+    folded = venue.casefold()
+    return any(hint.casefold() in folded for hint in KYODO_LARGE_VENUE_HINTS)
+
+
+def _kyodo_classify(event: Event) -> Event:
+    base = classify_event(event)
+    if base.decision == "exclude":
+        return base
+    if _kyodo_is_large_venue(event.venue):
+        return replace(base, decision="display", decision_reason="キョードー東海掲載かつ主要会場")
+    return replace(base, decision="hold", decision_reason="キョードー東海掲載だが会場規模を保留")
+
+
+def parse_kyodo_events(page_html: str, source_url: str = KYODO_LIST_URL):
+    soup = BeautifulSoup(page_html, "html.parser")
+    events = []
+    for dl in soup.select("div.eventlistbox dl"):
+        title_link = dl.select_one("dt a.alink[href]")
+        if not title_link:
+            continue
+        title = title_link.get_text(" ", strip=True)
+        full_text = " ".join(dl.stripped_strings)
+        dm = JP_DATE_RE.search(full_text)
+        if not title or not dm or not dm.group("year"):
+            continue
+        start = f"{int(dm.group('year')):04d}-{int(dm.group('month')):02d}-{int(dm.group('day')):02d}"
+        dd = dl.find("dd")
+        venue_text = " ".join(dd.stripped_strings) if dd else full_text
+        vm = re.search(r"【会場名】\s*(.*?)\s*【料金】", venue_text)
+        if not vm:
+            continue
+        venue = vm.group(1).strip()
+        if not _kyodo_is_aichi_venue(venue):
+            continue
+        official = urljoin(KYODO_BASE, title_link.get("href"))
+        event = Event(title, start, start, venue, "愛知県", "コンサート・ショー", "キョードー東海", official)
+        events.append(_kyodo_classify(event))
+    unique = {(e.title, e.start_date, e.end_date, e.venue): e for e in events}
+    return list(unique.values())
+
+
 def build_site(events: list[Event]):
     SITE_DIR.mkdir(exist_ok=True)
     events = sorted(events, key=lambda e: (e.start_date, e.title))
@@ -257,7 +323,9 @@ def build_site(events: list[Event]):
 
 def main():
     today = date.today()
+    allowed_months = set(month_keys_dash(today, 6))
     collected = []
+
     print("SOURCE Aichi Sky Expo")
     for ym in month_keys(today, 6):
         url = SKY_LIST_URL.format(ym=ym)
@@ -265,6 +333,7 @@ def main():
         found = parse_events(fetch_html(url), url)
         print("  ->", len(found), "events")
         collected.extend(found)
+
     print("SOURCE IG Arena")
     for ym in month_keys_dash(today, 6):
         url = IG_API_URL.format(ym=ym)
@@ -272,6 +341,13 @@ def main():
         found = parse_ig_api(fetch_json(url), ym)
         print("  ->", len(found), "events")
         collected.extend(found)
+
+    print("SOURCE Kyodo Tokai")
+    print("FETCH", KYODO_LIST_URL)
+    kyodo = [e for e in parse_kyodo_events(fetch_html(KYODO_LIST_URL), KYODO_LIST_URL) if e.start_date[:7] in allowed_months]
+    print("  ->", len(kyodo), "events")
+    collected.extend(kyodo)
+
     today_iso = today.isoformat()
     collected = [e for e in collected if e.end_date >= today_iso]
     unique = {(e.title, e.start_date, e.end_date, e.venue): e for e in collected}
