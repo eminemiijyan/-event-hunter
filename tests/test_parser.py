@@ -1,4 +1,4 @@
-from src.fetch_events import Event, classify_event, parse_events
+from src.fetch_events import Event, classify_event, parse_events, parse_ig_api
 
 SAMPLE = """
 <html><body>
@@ -48,5 +48,41 @@ assert family_sale.decision == "hold"
 
 kids_shogi = classify_event(Event(title="将棋日本シリーズJTプロ公式戦/テーブルマークこども大会 東海大会", **base))
 assert kids_shogi.decision == "hold"
+
+ig_payload = {
+    "data": [
+        {
+            "id": 2017,
+            "date": "2026年11月1日（日）",
+            "title": "りそなグループ B.LEAGUE 2026-27 B.LEAGUE PREMIER リーグ戦　名古屋ダイヤモンドドルフィンズ vs 滋賀レイクス",
+            "link": "2017",
+        },
+        {
+            "id": 2014,
+            "date": "2026年11月7日（土）",
+            "title": "HOSHIMACHI SUISEI ARENA TOUR 2026 Once Upon a Stellar",
+            "link": "2014",
+        },
+        {
+            "id": 2013,
+            "date": "2026年11月13日（金）・11月14日（土）",
+            "title": "緑黄色社会 ARENA TOUR 2026 \"あたまご\"",
+            "link": "2013",
+        },
+    ]
+}
+
+ig_events = parse_ig_api(ig_payload, "2026-11")
+assert len(ig_events) == 3
+assert ig_events[0].start_date == "2026-11-01"
+assert ig_events[0].end_date == "2026-11-01"
+assert ig_events[0].category == "スポーツ"
+assert ig_events[0].decision == "display"
+assert ig_events[0].official_url == "https://www.ig-arena.jp/events/2017/"
+assert ig_events[1].category == "コンサート・ショー"
+assert ig_events[1].decision == "display"
+assert ig_events[2].start_date == "2026-11-13"
+assert ig_events[2].end_date == "2026-11-14"
+assert ig_events[2].source == "IGアリーナ"
 
 print("PASS")
