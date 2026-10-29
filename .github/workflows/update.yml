@@ -41,7 +41,7 @@ jobs:
           PYTHONPATH=. python tests/test_moricoro.py
 
       - name: Fetch core events
-        run: python src/fetch_events.py
+        run: PYTHONPATH=. python src/fetch_events_resilient.py
 
       - name: Add Aichi Now pickups
         run: python src/append_aichi_now.py
