@@ -37,6 +37,7 @@ jobs:
           PYTHONPATH=. python tests/test_parser.py
           PYTHONPATH=. python tests/test_aichi_now.py
           PYTHONPATH=. python tests/test_nagoya_info.py
+          PYTHONPATH=. python tests/test_portmesse.py
 
       - name: Fetch core events
         run: python src/fetch_events.py
@@ -46,6 +47,9 @@ jobs:
 
       - name: Add Nagoya Concierge city events
         run: PYTHONPATH=. python src/append_nagoya_info.py
+
+      - name: Add Port Messe Nagoya exhibitions
+        run: PYTHONPATH=. python src/append_portmesse.py
 
       - name: Refine borderline events
         run: python src/refine_events.py
