@@ -46,7 +46,7 @@ CONCERT_WORDS = ("TOUR", "ツアー", "LIVE", "ライブ", "コンサート", "A
 KYODO_AICHI_VENUE_HINTS = (
     "愛知", "名古屋", "豊橋", "岡崎", "豊田", "一宮", "刈谷", "常滑", "長久手", "小牧", "春日井",
     "安城", "半田", "蒲郡", "豊川", "瀬戸", "稲沢", "東海市", "知多", "日進", "大府", "知立",
-    "犬山", "江南", "クロコくんホール", "COMTEC PORTBASE", "HeartLand", "DIAMOND HALL",
+    "犬山", "江南", "クロコくんホール", "COMTEC PORTBASE", "Zepp Nagoya", "HeartLand", "DIAMOND HALL",
     "ダイアモンドホール", "ElectricLadyLand", "ell.FITS ALL", "CLUB QUATTRO", "ボトムライン",
     "BOTTOM LINE", "SPADE BOX", "ReNY limited",
 )
