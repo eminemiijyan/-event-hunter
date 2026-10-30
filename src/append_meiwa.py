@@ -18,6 +18,7 @@ SITE_DIR = Path(__file__).resolve().parents[1] / "site"
 TARGET_WORDS = ("祭", "まつり", "フェス", "観月会", "ランタン", "花火", "ライトアップ", "イルミ", "斎王")
 EXCLUDE_WORDS = ("満月イベント", "満月屋台", "月の市", "ワークショップ", "収穫体験", "講座", "セミナー", "募集")
 POSTED_RE = re.compile(r"(20\d{2})年(\d{1,2})月(\d{1,2})日\s*/")
+META_RE = re.compile(r"(20\d{2})年(\d{1,2})月(\d{1,2})日\s*/\s*最終更新日時\s*[:：]\s*20\d{2}年\d{1,2}月\d{1,2}日")
 GREG_JP_RE = re.compile(r"(20\d{2})年\s*(\d{1,2})月\s*(\d{1,2})日")
 MD_RE = re.compile(r"(?<!\d)(\d{1,2})月\s*(\d{1,2})日")
 
@@ -75,10 +76,12 @@ def parse_listing(page_html: str) -> list[dict]:
 
 
 def _date_range(text: str) -> tuple[date, date] | None:
-    posted = POSTED_RE.search(text)
+    metadata = META_RE.search(text)
+    posted = metadata or POSTED_RE.search(text)
     posted_year = int(posted.group(1)) if posted else datetime.now(ZoneInfo("Asia/Tokyo")).year
     posted_month = int(posted.group(2)) if posted else 1
-    scrubbed = POSTED_RE.sub("", text)
+    scrubbed = META_RE.sub("", text)
+    scrubbed = POSTED_RE.sub("", scrubbed)
     dates: list[date] = []
     for y, mo, d in GREG_JP_RE.findall(scrubbed):
         try:
