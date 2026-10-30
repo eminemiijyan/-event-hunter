@@ -55,6 +55,9 @@ jobs:
           PYTHONPATH=. python tests/test_miemu.py
           PYTHONPATH=. python tests/test_mie_culture.py
           PYTHONPATH=. python tests/test_mie_art.py
+          PYTHONPATH=. python tests/test_ise_kanko.py
+          PYTHONPATH=. python tests/test_toba_kanko.py
+          PYTHONPATH=. python tests/test_toba_aquarium.py
 
       - name: Fetch core events
         run: PYTHONPATH=. python src/fetch_events_resilient.py
@@ -118,6 +121,15 @@ jobs:
 
       - name: Add Mie Prefectural Art Museum planning exhibitions
         run: PYTHONPATH=. python src/append_mie_art.py
+
+      - name: Add Ise tourism major events
+        run: PYTHONPATH=. python src/append_ise_kanko.py
+
+      - name: Add Toba tourism major events
+        run: PYTHONPATH=. python src/append_toba_kanko.py
+
+      - name: Add Toba Aquarium seasonal events
+        run: PYTHONPATH=. python src/append_toba_aquarium.py
 
       - name: Refine borderline events
         run: python src/refine_events.py
