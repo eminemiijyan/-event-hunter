@@ -37,6 +37,7 @@ jobs:
           PYTHONPATH=. python tests/test_parser.py
           PYTHONPATH=. python tests/test_aichi_now.py
           PYTHONPATH=. python tests/test_nagoya_info.py
+          PYTHONPATH=. python tests/test_oasis21.py
           PYTHONPATH=. python tests/test_portmesse.py
           PYTHONPATH=. python tests/test_moricoro.py
           PYTHONPATH=. python tests/test_toyohashi.py
@@ -52,6 +53,9 @@ jobs:
 
       - name: Add Nagoya Concierge city events
         run: PYTHONPATH=. python src/append_nagoya_info.py
+
+      - name: Add Oasis21 major events
+        run: PYTHONPATH=. python src/append_oasis21.py
 
       - name: Add Port Messe Nagoya exhibitions
         run: PYTHONPATH=. python src/append_portmesse.py
