@@ -42,6 +42,7 @@ jobs:
           PYTHONPATH=. python tests/test_toyohashi.py
           PYTHONPATH=. python tests/test_okazaki.py
           PYTHONPATH=. python tests/test_toyota.py
+          PYTHONPATH=. python tests/test_zepp_nagoya.py
 
       - name: Fetch core events
         run: PYTHONPATH=. python src/fetch_events_resilient.py
@@ -66,6 +67,9 @@ jobs:
 
       - name: Add Toyota major events
         run: PYTHONPATH=. python src/append_toyota.py
+
+      - name: Add Zepp Nagoya concerts
+        run: PYTHONPATH=. python src/append_zepp_nagoya.py
 
       - name: Refine borderline events
         run: python src/refine_events.py
