@@ -51,6 +51,7 @@ jobs:
           PYTHONPATH=. python tests/test_gifu_ncc.py
           PYTHONPATH=. python tests/test_gifu_parks.py
           PYTHONPATH=. python tests/test_suzuka.py
+          PYTHONPATH=. python tests/test_nagashima.py
 
       - name: Fetch core events
         run: PYTHONPATH=. python src/fetch_events_resilient.py
@@ -102,6 +103,9 @@ jobs:
 
       - name: Add Suzuka Circuit major events
         run: PYTHONPATH=. python src/append_suzuka.py
+
+      - name: Add Nagashima Spa Land major events
+        run: PYTHONPATH=. python src/append_nagashima.py
 
       - name: Refine borderline events
         run: python src/refine_events.py
