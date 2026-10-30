@@ -41,6 +41,7 @@ jobs:
           PYTHONPATH=. python tests/test_moricoro.py
           PYTHONPATH=. python tests/test_toyohashi.py
           PYTHONPATH=. python tests/test_okazaki.py
+          PYTHONPATH=. python tests/test_toyota.py
 
       - name: Fetch core events
         run: PYTHONPATH=. python src/fetch_events_resilient.py
@@ -62,6 +63,9 @@ jobs:
 
       - name: Add Okazaki major events
         run: PYTHONPATH=. python src/append_okazaki.py
+
+      - name: Add Toyota major events
+        run: PYTHONPATH=. python src/append_toyota.py
 
       - name: Refine borderline events
         run: python src/refine_events.py
