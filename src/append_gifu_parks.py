@@ -14,7 +14,20 @@ from bs4 import BeautifulSoup
 URL = "https://www.city.gifu.lg.jp/info/machizukuri/1007994/1035968/index.html"
 SITE_DIR = Path(__file__).resolve().parents[1] / "site"
 DATE_RE = re.compile(r"(?:(20\d{2})年)?\s*(\d{1,2})月\s*(\d{1,2})日")
-EVENT_RE = re.compile(r"〖([^〗]+)〗")
+
+VENUE_PREFIXES = (
+    "岐阜市畜産センター公園",
+    "岐阜ファミリーパーク",
+    "岐阜公園・岐阜城楽市",
+    "リバーパークおぶさ",
+    "岐阜公園 芝生広場",
+    "岐阜公園　芝生広場",
+    "長良川公園",
+    "長良公園",
+    "清水緑地",
+    "金公園",
+    "岐阜公園",
+)
 
 
 def fetch_html(url: str, attempts: int = 3) -> str:
@@ -27,7 +40,6 @@ def fetch_html(url: str, attempts: int = 3) -> str:
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             })
             r.raise_for_status()
-            # 岐阜市公式サイトはUTF-8のため、環境ごとの推定差を避ける。
             r.encoding = "utf-8"
             return r.text
         except requests.RequestException as exc:
@@ -65,43 +77,88 @@ def _parse_date_block(text: str, base_year: int) -> tuple[date, date] | None:
     return min(values), max(values)
 
 
-def _venue_before(text: str, marker_start: int) -> str:
-    before = text[:marker_start]
-    lines = [line.strip() for line in before.splitlines() if line.strip()]
-    if not lines:
-        return "岐阜市内公園"
-    venue = lines[-1]
-    if len(venue) > 100 or "開催日" in venue or "大型イベント" in venue:
-        return "岐阜市内公園"
-    return venue
+def _strip_brackets(text: str) -> str:
+    return text.strip().strip("〖〗").strip()
+
+
+def _split_combined(line: str) -> tuple[str, str] | None:
+    line = " ".join(line.split())
+    if "〖" in line and "〗" in line:
+        before, rest = line.split("〖", 1)
+        title = rest.split("〗", 1)[0].strip()
+        if title:
+            return before.strip() or "岐阜市内公園", title
+    for venue in VENUE_PREFIXES:
+        if line == venue:
+            return None
+        if line.startswith(venue):
+            title = line[len(venue):].strip(" 　:：")
+            if title:
+                return venue, _strip_brackets(title)
+    return None
+
+
+def _is_venue(line: str) -> bool:
+    norm = " ".join(line.split())
+    return any(norm == " ".join(v.split()) for v in VENUE_PREFIXES)
+
+
+def _heading_before(lines: list[str], date_index: int) -> tuple[str, str] | None:
+    window = lines[max(0, date_index - 5):date_index]
+    title: str | None = None
+    venue: str | None = None
+
+    for line in reversed(window):
+        line = " ".join(line.split())
+        if not line or "大型イベント" in line or "開催日" in line:
+            continue
+        combined = _split_combined(line)
+        if combined:
+            return combined
+        if _is_venue(line):
+            venue = line
+            if title:
+                return venue, title
+            continue
+        if title is None:
+            title = _strip_brackets(line)
+
+    if title:
+        return venue or "岐阜市内公園", title
+    return None
 
 
 def parse_events(page_html: str, base_year: int) -> list[dict]:
     soup = BeautifulSoup(page_html, "html.parser")
-    visible = "\n".join(" ".join(s.split()) for s in soup.stripped_strings)
+    lines = [" ".join(s.split()) for s in soup.stripped_strings]
 
-    # 岐阜市が「大型イベント」と明記した区間だけを対象にする。
-    section_pos = visible.find("その他の公園の大型イベント")
-    if section_pos >= 0:
-        visible = visible[section_pos + len("その他の公園の大型イベント"):]
-    for stop_word in ("このページに関するお問い合わせ", "より良いホームページ"):
-        stop = visible.find(stop_word)
-        if stop >= 0:
-            visible = visible[:stop]
+    start = 0
+    for idx, line in enumerate(lines):
+        if "その他の公園の大型イベント" in line:
+            start = idx + 1
+            break
+    end = len(lines)
+    for idx in range(start, len(lines)):
+        if "このページに関するお問い合わせ" in lines[idx] or "より良いホームページ" in lines[idx]:
+            end = idx
+            break
+    lines = lines[start:end]
 
-    matches = list(EVENT_RE.finditer(visible))
     out: list[dict] = []
     seen: set[tuple[str, str]] = set()
-
-    for idx, match in enumerate(matches):
-        title = " ".join(match.group(1).split())
-        if not title:
+    for i, line in enumerate(lines):
+        if "開催日" not in line:
             continue
-        next_start = matches[idx + 1].start() if idx + 1 < len(matches) else len(visible)
-        body = visible[match.end():next_start]
-        dates = _parse_date_block(body, base_year)
+        date_text = line
+        if i + 1 < len(lines) and "開催日" not in lines[i + 1] and DATE_RE.search(lines[i + 1]):
+            date_text += " " + lines[i + 1]
+        dates = _parse_date_block(date_text, base_year)
         if not dates:
             continue
+        heading = _heading_before(lines, i)
+        if not heading:
+            continue
+        venue, title = heading
         start_date, end_date = dates
         key = (title, start_date.isoformat())
         if key in seen:
@@ -110,7 +167,7 @@ def parse_events(page_html: str, base_year: int) -> list[dict]:
             "title": title,
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat(),
-            "venue": _venue_before(visible, match.start()),
+            "venue": venue,
             "prefecture": "岐阜県",
             "category": category_for(title),
             "source": "岐阜市公園イベント",
@@ -163,7 +220,6 @@ def main():
             "parsed", len(parsed),
             "has_title", "岐阜市内公園のイベント情報" in visible,
             "has_section", "その他の公園の大型イベント" in visible,
-            "has_brackets", "〖" in visible and "〗" in visible,
             "has_date", bool(DATE_RE.search(visible)),
         )
         print("GIFU_PARKS skipped: no future exact-date events parsed")
