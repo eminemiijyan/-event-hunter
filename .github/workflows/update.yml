@@ -44,6 +44,8 @@ jobs:
           PYTHONPATH=. python tests/test_okazaki.py
           PYTHONPATH=. python tests/test_toyota.py
           PYTHONPATH=. python tests/test_zepp_nagoya.py
+          PYTHONPATH=. python tests/test_niterra.py
+          PYTHONPATH=. python tests/test_aichi_arts.py
 
       - name: Fetch core events
         run: PYTHONPATH=. python src/fetch_events_resilient.py
@@ -74,6 +76,12 @@ jobs:
 
       - name: Add Zepp Nagoya concerts
         run: PYTHONPATH=. python src/append_zepp_nagoya.py
+
+      - name: Add Niterra civic hall public events
+        run: PYTHONPATH=. python src/append_niterra.py
+
+      - name: Add Aichi Arts Theater official events
+        run: PYTHONPATH=. python src/append_aichi_arts.py
 
       - name: Refine borderline events
         run: python src/refine_events.py
