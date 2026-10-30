@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
@@ -24,20 +25,30 @@ SKIP_WORDS = (
 ISO_DATE_RE = re.compile(r"(20\d{2})-(\d{2})-(\d{2})")
 
 
-def fetch_html(url: str = SOURCE_URL) -> str:
-    r = requests.get(
-        url,
-        timeout=30,
-        headers={
-            "User-Agent": "Mozilla/5.0 (compatible; EventHunterPersonal/0.9)",
-            "Accept-Language": "ja-JP,ja;q=0.9,en;q=0.8",
-        },
-    )
-    r.raise_for_status()
-    # The site declares UTF-8. Do not replace it with apparent_encoding,
-    # which can mis-detect Japanese pages and corrupt event titles.
-    r.encoding = "utf-8"
-    return r.text
+def fetch_html(url: str = SOURCE_URL, attempts: int = 3) -> str:
+    last_error: requests.RequestException | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            r = requests.get(
+                url,
+                timeout=(10, 45),
+                headers={
+                    "User-Agent": "Mozilla/5.0 (compatible; EventHunterPersonal/0.9)",
+                    "Accept-Language": "ja-JP,ja;q=0.9,en;q=0.8",
+                },
+            )
+            r.raise_for_status()
+            # The site declares UTF-8. Do not replace it with apparent_encoding,
+            # which can mis-detect Japanese pages and corrupt event titles.
+            r.encoding = "utf-8"
+            return r.text
+        except requests.RequestException as exc:
+            last_error = exc
+            print(f"MORICORO retry {attempt}/{attempts}: {type(exc).__name__}")
+            if attempt < attempts:
+                time.sleep(attempt * 2)
+    assert last_error is not None
+    raise last_error
 
 
 def _is_major(title: str) -> bool:
@@ -136,7 +147,13 @@ def main():
     events = json.loads(events_path.read_text(encoding="utf-8"))
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
 
-    found = [e for e in parse_events(fetch_html()) if e["end_date"] >= today.isoformat()]
+    try:
+        html = fetch_html()
+    except requests.RequestException as exc:
+        print("MORICORO skipped: source unavailable", type(exc).__name__)
+        return
+
+    found = [e for e in parse_events(html) if e["end_date"] >= today.isoformat()]
     if not found:
         raise RuntimeError("モリコロパークの主要イベントを取得できませんでした。")
 
