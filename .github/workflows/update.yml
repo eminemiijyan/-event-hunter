@@ -60,6 +60,9 @@ jobs:
           PYTHONPATH=. python tests/test_toba_aquarium.py
           PYTHONPATH=. python tests/test_shima_spain.py
           PYTHONPATH=. python tests/test_shima_kanko.py
+          PYTHONPATH=. python tests/test_watarai.py
+          PYTHONPATH=. python tests/test_minamiise.py
+          PYTHONPATH=. python tests/test_meiwa.py
 
       - name: Fetch core events
         run: PYTHONPATH=. python src/fetch_events_resilient.py
@@ -138,6 +141,15 @@ jobs:
 
       - name: Add Shima tourism major events
         run: PYTHONPATH=. python src/append_shima_kanko.py
+
+      - name: Add Watarai Town major events
+        run: PYTHONPATH=. python src/append_watarai.py
+
+      - name: Add Minamiise dated major events
+        run: PYTHONPATH=. python src/append_minamiise.py
+
+      - name: Add Meiwa tourism major events
+        run: PYTHONPATH=. python src/append_meiwa.py
 
       - name: Refine borderline events
         run: python src/refine_events.py
