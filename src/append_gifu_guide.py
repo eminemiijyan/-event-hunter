@@ -14,8 +14,16 @@ from bs4 import BeautifulSoup
 
 BASE = "https://www.kankou-gifu.jp"
 INDEX_URL = BASE + "/event/index.html"
+FALLBACK_LIST_URLS = (
+    BASE + "/event/",
+    INDEX_URL,
+    BASE + "/event/index_2_1______.html",
+    BASE + "/event/index_3_1______.html",
+    BASE + "/event/index_4_1______.html",
+)
 SITE_DIR = Path(__file__).resolve().parents[1] / "site"
-MAX_LIST_PAGES = 4
+MAX_LIST_PAGES = 5
+MAX_DETAIL_LINKS = 80
 
 DATE_RE = re.compile(r"(?:(20\d{2})年)?\s*(?:(\d{1,2})月)?\s*(\d{1,2})日")
 
@@ -39,15 +47,17 @@ def fetch_html(url: str, attempts: int = 3) -> str:
                 url,
                 timeout=(10, 45),
                 headers={
-                    "User-Agent": "Mozilla/5.0 (compatible; EventHunterPersonal/1.0)",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36",
                     "Accept-Language": "ja-JP,ja;q=0.9,en;q=0.8",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Cache-Control": "no-cache",
                 },
             )
             r.raise_for_status()
             if not r.encoding or r.encoding.lower() == "iso-8859-1":
                 r.encoding = r.apparent_encoding
             return r.text
-        except (requests.Timeout, requests.ConnectionError) as exc:
+        except requests.RequestException as exc:
             last_error = exc
             print(f"GIFU_GUIDE retry {attempt}/{attempts}: {type(exc).__name__} {url}")
             if attempt < attempts:
@@ -61,9 +71,9 @@ def _norm(text: str) -> str:
     return re.sub(r"[^0-9a-z\u3040-\u30ff\u3400-\u9fff]+", "", text)
 
 
-def discover_listing_pages(index_html: str) -> list[str]:
+def discover_listing_pages(index_html: str, root_url: str = INDEX_URL) -> list[str]:
     soup = BeautifulSoup(index_html, "html.parser")
-    pages = [INDEX_URL]
+    pages = [root_url]
     for a in soup.select('a[href*="/event/index_"]'):
         href = a.get("href", "").strip()
         if not href:
@@ -149,10 +159,15 @@ def category_for(title: str, categories: str) -> str:
 
 def parse_detail(page_html: str, url: str) -> dict | None:
     soup = BeautifulSoup(page_html, "html.parser")
-    title_node = soup.find(["h1", "h2"])
-    if not title_node:
-        return None
-    title = " ".join(title_node.get_text(" ", strip=True).split())
+    title = ""
+    for node in soup.find_all(["h1", "h2"]):
+        candidate = " ".join(node.get_text(" ", strip=True).split())
+        if not candidate or candidate in ("イベント", "イベント情報"):
+            continue
+        if "岐阜の旅ガイド" in candidate:
+            continue
+        title = candidate
+        break
     if not title:
         return None
 
@@ -195,6 +210,44 @@ def _same_event(existing: dict, candidate: dict) -> bool:
     return bool(a and b and (a == b or a in b or b in a))
 
 
+def _collect_listing_pages() -> list[tuple[str, str]]:
+    pages: list[tuple[str, str]] = []
+    seen_urls: set[str] = set()
+
+    for candidate_url in FALLBACK_LIST_URLS:
+        if candidate_url in seen_urls:
+            continue
+        try:
+            html = fetch_html(candidate_url)
+        except requests.RequestException as exc:
+            print("GIFU_GUIDE list unavailable", type(exc).__name__, candidate_url)
+            continue
+        if not extract_detail_links(html):
+            print("GIFU_GUIDE list has no detail links", candidate_url)
+            continue
+        pages.append((candidate_url, html))
+        seen_urls.add(candidate_url)
+
+        for discovered_url in discover_listing_pages(html, candidate_url):
+            if len(pages) >= MAX_LIST_PAGES:
+                break
+            if discovered_url in seen_urls:
+                continue
+            try:
+                discovered_html = fetch_html(discovered_url)
+            except requests.RequestException as exc:
+                print("GIFU_GUIDE discovered list unavailable", type(exc).__name__, discovered_url)
+                continue
+            if not extract_detail_links(discovered_html):
+                continue
+            pages.append((discovered_url, discovered_html))
+            seen_urls.add(discovered_url)
+        if len(pages) >= MAX_LIST_PAGES:
+            break
+
+    return pages[:MAX_LIST_PAGES]
+
+
 def main():
     today = datetime.now(ZoneInfo("Asia/Tokyo")).date()
     events_path = SITE_DIR / "events.json"
@@ -202,26 +255,24 @@ def main():
     events = json.loads(events_path.read_text(encoding="utf-8"))
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
 
-    try:
-        index_html = fetch_html(INDEX_URL)
-    except requests.RequestException as exc:
-        print("GIFU_GUIDE skipped: source unavailable", type(exc).__name__)
+    pages = _collect_listing_pages()
+    if not pages:
+        print("GIFU_GUIDE skipped: all official listing URLs unavailable")
         return
 
-    pages = discover_listing_pages(index_html)
     detail_links: list[str] = []
-    for page_url in pages:
-        try:
-            html = index_html if page_url == INDEX_URL else fetch_html(page_url)
-        except requests.RequestException as exc:
-            print("GIFU_GUIDE list skipped", type(exc).__name__, page_url)
-            continue
+    for _, html in pages:
         for url in extract_detail_links(html):
             if url not in detail_links:
                 detail_links.append(url)
+            if len(detail_links) >= MAX_DETAIL_LINKS:
+                break
+        if len(detail_links) >= MAX_DETAIL_LINKS:
+            break
 
     if not detail_links:
-        raise RuntimeError("岐阜の旅ガイドのイベント詳細リンクを取得できませんでした。")
+        print("GIFU_GUIDE skipped: no event detail links")
+        return
 
     found: list[dict] = []
     failed = 0
@@ -237,7 +288,8 @@ def main():
             found.append(item)
 
     if not found:
-        raise RuntimeError("岐阜の旅ガイドから対象イベントを取得できませんでした。")
+        print("GIFU_GUIDE skipped: no target events parsed", "links", len(detail_links), "failed", failed)
+        return
 
     before = len(events)
     for item in sorted(found, key=lambda e: (e["start_date"], e["title"])):
