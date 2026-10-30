@@ -48,6 +48,8 @@ jobs:
           PYTHONPATH=. python tests/test_aichi_arts.py
           PYTHONPATH=. python tests/test_gifu_guide.py
           PYTHONPATH=. python tests/test_gifu_culture.py
+          PYTHONPATH=. python tests/test_gifu_ncc.py
+          PYTHONPATH=. python tests/test_gifu_parks.py
 
       - name: Fetch core events
         run: PYTHONPATH=. python src/fetch_events_resilient.py
@@ -90,6 +92,12 @@ jobs:
 
       - name: Add Gifu Culture Center public events
         run: PYTHONPATH=. python src/append_gifu_culture.py
+
+      - name: Add Nagaragawa Convention Center public events
+        run: PYTHONPATH=. python src/append_gifu_ncc.py
+
+      - name: Add Gifu city major park events
+        run: PYTHONPATH=. python src/append_gifu_parks.py
 
       - name: Refine borderline events
         run: python src/refine_events.py
