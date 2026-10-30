@@ -3,9 +3,10 @@ from src.append_niterra import discover_month_pages, parse_month
 
 HOME = """
 <html><body>
-<a href="/kaikan/event/847.html">2026年10月</a>
-<a href="/kaikan/event/848.html">2026年11月</a>
-<a href="/kaikan/event/700.html">2026年9月</a>
+<a href="/kaikan/event/847.html">【市民会館】令和8年10月の催事案内</a>
+<a href="/kaikan/event/848.html">【市民会館】令和8年11月の催事案内</a>
+<a href="/kaikan/event/700.html">【市民会館】令和8年9月の催事案内</a>
+<a href="/kaikan/event/999.html">【音楽プラザ】令和8年11月の催事案内</a>
 </body></html>
 """
 pages = discover_month_pages(HOME, date(2026, 10, 30))
