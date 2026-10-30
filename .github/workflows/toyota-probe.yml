@@ -13,38 +13,20 @@ jobs:
     steps:
       - name: Install parser
         run: pip install beautifulsoup4 requests
-      - name: Inspect Tourism Toyota source
+      - name: Inspect Tourism Toyota monthly event boxes
         shell: python
         run: |
           import requests
           from bs4 import BeautifulSoup
-          from urllib.parse import urljoin
           headers={'User-Agent':'Mozilla/5.0 (compatible; EventHunterPersonal/1.0)','Accept-Language':'ja-JP,ja;q=0.9'}
-          urls=['https://www.tourismtoyota.jp/events/calendar/2026-11-01/','https://www.tourismtoyota.jp/events/calendar/2026-12-01/','https://www.tourismtoyota.jp/events/calendar/2027-01-01/']
-          for url in urls:
-              r=requests.get(url,timeout=30,headers=headers)
-              print('PAGE',url,'status',r.status_code,'bytes',len(r.content),'final',r.url)
-              r.raise_for_status(); r.encoding=r.apparent_encoding
-              soup=BeautifulSoup(r.text,'html.parser')
-              links=[]
-              for a in soup.find_all('a',href=True):
-                  txt=' '.join(a.stripped_strings)
-                  href=a.get('href','')
-                  if ('とよた産業フェスタ' in txt or '香嵐渓もみじまつり' in txt or 'イルミネーションストーリー' in txt or '/spots/detail/' in href):
-                      links.append((a.name,a.get('class'),txt[:120],href))
-              print('LINKS',links[:80])
-              for sel in ['article','.event','.eventList li','.event_list li','li']:
-                  hits=[]
-                  for tag in soup.select(sel):
-                      txt=' '.join(tag.stripped_strings)
-                      if any(k in txt for k in ['とよた産業フェスタ','香嵐渓もみじまつり','イルミネーションストーリー']):
-                          hits.append((sel,tag.get('class'),txt[:700],str(tag)[:2500]))
-                          if len(hits)>=6: break
-                  if hits: print('HITS',hits)
-          d=requests.get('https://www.tourismtoyota.jp/spots/detail/2265/',timeout=30,headers=headers)
-          print('DETAIL_STATUS',d.status_code,len(d.content)); d.raise_for_status(); d.encoding=d.apparent_encoding
-          ds=BeautifulSoup(d.text,'html.parser')
-          for tag in ds.find_all(['th','dt','td','dd','li','div','p']):
-              txt=' '.join(tag.stripped_strings)
-              if txt.startswith(('開催時期','開催場所')) and len(txt)<700:
-                  print('DETAIL',tag.name,tag.get('class'),txt[:700],str(tag)[:1600])
+          url='https://www.tourismtoyota.jp/events/calendar/2026-11-01/'
+          r=requests.get(url,timeout=30,headers=headers)
+          print('PAGE',r.status_code,len(r.content)); r.raise_for_status(); r.encoding=r.apparent_encoding
+          soup=BeautifulSoup(r.text,'html.parser')
+          boxes=soup.select('.monthly_event_box')
+          print('BOXES',len(boxes))
+          for box in boxes:
+              txt=' '.join(box.stripped_strings)
+              if any(k in txt for k in ['とよた産業フェスタ','香嵐渓もみじまつり','KIRABOSHI FES','豊田しもやまラリー']):
+                  print('BOX_TEXT',txt[:1200])
+                  print('BOX_HTML',str(box)[:4500])
