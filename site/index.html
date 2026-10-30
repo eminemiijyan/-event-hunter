@@ -31,6 +31,7 @@ main{max-width:760px;margin:auto;padding:12px 12px 80px}.status{font-size:13px;c
     <button data-period="30">30日</button>
     <button data-period="all">すべて</button>
   </div>
+  <div class="controls" id="prefectures" style="margin-top:8px"></div>
   <div class="controls" id="categories" style="margin-top:8px"></div>
 </header>
 <main>
@@ -39,7 +40,7 @@ main{max-width:760px;margin:auto;padding:12px 12px 80px}.status{font-size:13px;c
 </main>
 <footer id="footer"></footer>
 <script>
-let allEvents=[], period="weekend", category="すべて", decisionMode="display";
+let allEvents=[], period="weekend", prefecture="すべて", category="すべて", decisionMode="display";
 const pad=n=>String(n).padStart(2,"0");
 const iso=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const parse=s=>new Date(`${s}T00:00:00`);
@@ -59,6 +60,7 @@ function visible(e){
   if(e.end_date<today) return false;
   if(e.decision==="exclude") return false;
   if(decisionMode==="display" && e.decision!=="display") return false;
+  if(prefecture!=="すべて" && e.prefecture!==prefecture) return false;
   if(category!=="すべて" && e.category!==category) return false;
   if(period==="all") return true;
   if(period==="30"){
@@ -77,10 +79,10 @@ function render(){
   document.querySelector("#status").textContent=`${list.length}件表示${decisionMode==="display"&&held?` / 保留 ${held}件`:""}`;
   const box=document.querySelector("#events");
   box.innerHTML=list.length?list.map(e=>{
-    const date=e.start_date===e.end_date?fmt(e.start_date):`${fmt(e.start_date)}〜${fmt(e.end_date)}`;
+    const eventDate=e.start_date===e.end_date?fmt(e.start_date):`${fmt(e.start_date)}〜${fmt(e.end_date)}`;
     const holdTag=e.decision==="hold"?`<span class="tag hold" title="${escapeHtml(e.decision_reason||"")}">保留</span>`:"";
     return `<a class="card ${e.decision==="hold"?"hold":""}" href="${escapeHtml(e.official_url)}" target="_blank" rel="noopener">
-      <div class="date">${date}</div>
+      <div class="date">${eventDate}</div>
       <div class="title">${escapeHtml(e.title)}</div>
       <div class="meta">${escapeHtml(e.venue)}<br>${escapeHtml(e.prefecture)} / ${escapeHtml(e.source)}</div>
       <span class="tag">${escapeHtml(e.category)}</span>${holdTag}
@@ -90,6 +92,17 @@ function render(){
 async function init(){
   const [ev,meta]=await Promise.all([fetch("./events.json"),fetch("./meta.json")]);
   allEvents=await ev.json(); const m=await meta.json();
+
+  const prefs=["すべて",...new Set(allEvents.filter(e=>e.decision!=="exclude").map(e=>e.prefecture).filter(Boolean))];
+  const pbox=document.querySelector("#prefectures");
+  pbox.innerHTML=prefs.map((p,i)=>`<button data-pref="${escapeHtml(p)}" class="${i===0?"active":""}">${escapeHtml(p)}</button>`).join("");
+  pbox.onclick=e=>{
+    if(!e.target.dataset.pref)return;
+    prefecture=e.target.dataset.pref;
+    [...pbox.children].forEach(b=>b.classList.toggle("active",b.dataset.pref===prefecture));
+    render();
+  };
+
   const cats=["すべて",...new Set(allEvents.filter(e=>e.decision!=="exclude").map(e=>e.category))];
   const cbox=document.querySelector("#categories");
   cbox.innerHTML=cats.map((c,i)=>`<button data-cat="${escapeHtml(c)}" class="${i===0?"active":""}">${escapeHtml(c)}</button>`).join("");
