@@ -1,0 +1,36 @@
+name: Probe Okazaki
+
+on:
+  push:
+    branches: [probe-okazaki]
+    paths:
+      - '.github/workflows/okazaki-probe.yml'
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install parser
+        run: pip install beautifulsoup4 requests
+      - name: Inspect Okazaki source
+        shell: python
+        run: |
+          import requests
+          from bs4 import BeautifulSoup
+          url='https://okazaki-kanko.jp/event/'
+          r=requests.get(url,timeout=30,headers={'User-Agent':'Mozilla/5.0 (compatible; EventHunterPersonal/1.0)','Accept-Language':'ja-JP,ja;q=0.9'})
+          print('status',r.status_code,'bytes',len(r.content),'ctype',r.headers.get('content-type'))
+          r.raise_for_status()
+          r.encoding=r.apparent_encoding
+          soup=BeautifulSoup(r.text,'html.parser')
+          print('title',soup.title.get_text(' ',strip=True) if soup.title else None)
+          for sel in ['article','li','div']:
+              hits=[]
+              for tag in soup.select(sel):
+                  txt=' '.join(tag.stripped_strings)
+                  if ('岡崎城下家康公秋まつり' in txt or 'あきまつり' in txt) and len(txt)<1500:
+                      hits.append((tag.name,tag.get('class'),txt[:500],str(tag)[:2000]))
+                      if len(hits)>=8: break
+              print('SAMPLE',sel,hits)
+          print('EVENT_LINKS',[(a.get_text(' ',strip=True)[:100],a.get('href')) for a in soup.find_all('a',href=True) if '/event/' in a.get('href','')][:80])
