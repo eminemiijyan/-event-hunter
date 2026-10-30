@@ -50,6 +50,7 @@ jobs:
           PYTHONPATH=. python tests/test_gifu_culture.py
           PYTHONPATH=. python tests/test_gifu_ncc.py
           PYTHONPATH=. python tests/test_gifu_parks.py
+          PYTHONPATH=. python tests/test_suzuka.py
 
       - name: Fetch core events
         run: PYTHONPATH=. python src/fetch_events_resilient.py
@@ -98,6 +99,9 @@ jobs:
 
       - name: Add Gifu city major park events
         run: PYTHONPATH=. python src/append_gifu_parks.py
+
+      - name: Add Suzuka Circuit major events
+        run: PYTHONPATH=. python src/append_suzuka.py
 
       - name: Refine borderline events
         run: python src/refine_events.py
