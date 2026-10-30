@@ -18,6 +18,7 @@ MONTHS_AHEAD = 6
 DETAIL_PATH_RE = re.compile(r"^/events/\d+/?$")
 YEAR_RE = re.compile(r"^(20\d{2})年$")
 MD_RE = re.compile(r"^(\d{1,2})/(\d{1,2})$")
+CARD_MD_RE = re.compile(r"(?<!\d)(\d{1,2})\s*/\s*(\d{1,2})(?!\d)")
 FULL_DATE_RE = re.compile(r"(20\d{2})年\s*(\d{1,2})月\s*(\d{1,2})日")
 SHORT_END_RE = re.compile(r"[～〜~\-]\s*(?:(20\d{2})年\s*)?(?:(\d{1,2})月\s*)?(\d{1,2})日")
 
@@ -106,21 +107,19 @@ def _date_from_link_text(text: str) -> tuple[str, str] | None:
 
 
 def _date_from_card(link, default_year: int | None = None) -> tuple[str, str] | None:
-    """Read the M/D label from the smallest ancestor card around an event link.
-
-    The Toba monthly page can place the visible date before or after the anchor in
-    source order, so previous-sibling scanning alone is not reliable.
-    """
+    """Read an M/D label from the smallest ancestor containing the event card."""
     for parent in link.parents:
         if getattr(parent, "name", None) in ("body", "html"):
             break
-        values = [" ".join(s.split()) for s in parent.stripped_strings]
-        md_match = next((MD_RE.fullmatch(v) for v in values if MD_RE.fullmatch(v)), None)
+        card_text = unicodedata.normalize(
+            "NFKC", " ".join(" ".join(s.split()) for s in parent.stripped_strings)
+        )
+        md_match = CARD_MD_RE.search(card_text)
         if not md_match:
             continue
         year = default_year
         if year is None:
-            ym = next((YEAR_RE.fullmatch(v) for v in values if YEAR_RE.fullmatch(v)), None)
+            ym = re.search(r"(20\d{2})年", card_text)
             if ym:
                 year = int(ym.group(1))
         if year is None:
@@ -138,7 +137,7 @@ def _date_from_nearby_list(link, default_year: int | None = None) -> tuple[str, 
     month: int | None = None
     day: int | None = None
     for raw in link.find_all_previous(string=True, limit=80):
-        text = " ".join(str(raw).split())
+        text = unicodedata.normalize("NFKC", " ".join(str(raw).split()))
         if not text:
             continue
         if month is None:
