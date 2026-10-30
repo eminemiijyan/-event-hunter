@@ -67,16 +67,23 @@ def parse_dates(text: str) -> tuple[str, str] | None:
     return start.isoformat(), end.isoformat()
 
 
-def _container_with_date(anchor):
+def _text_with_nearby_date(anchor) -> str:
     node = anchor
-    for _ in range(6):
+    for _ in range(12):
         node = node.parent
         if node is None:
             break
-        text = node.get_text(" ", strip=True)
-        if FULL_DATE_RE.search(text):
-            return node
-    return anchor.parent
+        text = " ".join(node.get_text(" ", strip=True).split())
+        if FULL_DATE_RE.search(text) and len(text) <= 3000:
+            return text
+
+    previous = anchor.find_previous(string=FULL_DATE_RE)
+    if previous:
+        return str(previous)
+    following = anchor.find_next(string=FULL_DATE_RE)
+    if following:
+        return str(following)
+    return ""
 
 
 def category_for(title: str) -> str:
@@ -93,12 +100,13 @@ def parse_events(page_html: str) -> list[dict]:
     out: list[dict] = []
     seen: set[str] = set()
 
-    for anchor in soup.select('a[href*="/event/detail/"]'):
+    # 本番サイトは相対リンク/絶対リンクのどちらもあり得るため detail/ で拾う。
+    for anchor in soup.select('a[href*="detail/"]'):
         href = anchor.get("href", "").strip()
         if not href:
             continue
-        url = urljoin(BASE, href)
-        if url in seen:
+        url = urljoin(EVENTS_URL, href)
+        if "/event/detail/" not in url or url in seen:
             continue
 
         title = " ".join(anchor.get_text(" ", strip=True).split()).strip()
@@ -107,8 +115,7 @@ def parse_events(page_html: str) -> list[dict]:
         if any(word in title for word in ("募集", "応募締切", "審査結果")):
             continue
 
-        container = _container_with_date(anchor)
-        text = container.get_text(" ", strip=True) if container else ""
+        text = _text_with_nearby_date(anchor)
         dates = parse_dates(text)
         if not dates:
             continue
