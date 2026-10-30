@@ -136,15 +136,25 @@ def parse_prefecture_fallback(page_html: str) -> list[dict]:
     h1 = soup.find("h1")
     if not h1:
         return []
+
     raw_title = " ".join(h1.get_text(" ", strip=True).split())
     if "三重県総合博物館" not in raw_title or "企画展" not in raw_title:
         return []
 
-    title = re.sub(r"^〖三重県総合博物館\s*MieMu〗\s*", "", raw_title)
+    title = re.sub(r"^[【〖]三重県総合博物館\s*MieMu[】〗]\s*", "", raw_title)
     title = re.sub(r"^第\d+回企画展\s*", "", title).strip()
 
-    visible = " ".join(soup.stripped_strings)
-    dates = _parse_range(visible)
+    lines = [" ".join(s.split()) for s in soup.stripped_strings]
+    dates: tuple[date, date] | None = None
+    for i, line in enumerate(lines):
+        normalized = unicodedata.normalize("NFKC", line).strip()
+        if normalized not in ("■期間", "期間"):
+            continue
+        date_block = " ".join(lines[i + 1:min(i + 4, len(lines))])
+        dates = _parse_range(date_block)
+        if dates:
+            break
+
     if not title or not dates:
         return []
     start, end = dates
