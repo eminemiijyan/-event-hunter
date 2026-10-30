@@ -1,4 +1,4 @@
-from src.append_miemu import parse_exhibitions
+from src.append_miemu import parse_exhibitions, parse_prefecture_fallback
 
 HTML = '''
 <html><body>
@@ -28,4 +28,19 @@ assert events[2]["end_date"] == "2027-02-28"
 assert events[2]["prefecture"] == "三重県"
 assert events[2]["category"] == "展示会"
 assert all("ミニ館蔵品展" not in e["title"] for e in events)
+
+FALLBACK_HTML = '''
+<html><body>
+<h1>〖三重県総合博物館 MieMu〗第45回企画展　みんなののりもの　三重の鉄道大集合</h1>
+<div>■期間</div>
+<div>令和８年10月24日（土曜日）から令和９年2月28日（日曜日）まで</div>
+<div>■場所</div><div>三重県総合博物館3階　企画展示室</div>
+</body></html>
+'''
+fallback = parse_prefecture_fallback(FALLBACK_HTML)
+assert len(fallback) == 1, fallback
+assert fallback[0]["title"] == "みんなののりもの 三重の鉄道大集合"
+assert fallback[0]["start_date"] == "2026-10-24"
+assert fallback[0]["end_date"] == "2027-02-28"
+assert fallback[0]["official_url"].startswith("https://www.pref.mie.lg.jp/")
 print("PASS")

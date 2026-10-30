@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import time
+import unicodedata
 from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -13,6 +14,7 @@ from bs4 import BeautifulSoup
 from src.append_aichi_now import append_pickups
 
 URL = "https://www.bunka.pref.mie.lg.jp/MieMu/84764046737.htm"
+FALLBACK_URL = "https://www.pref.mie.lg.jp/EVENTS/evt0008300150.htm"
 SITE_DIR = Path(__file__).resolve().parents[1] / "site"
 
 EXHIBIT_MARKER_RE = re.compile(r"^(?:特別展・)?第\d+回企画展$")
@@ -21,9 +23,14 @@ DATE_RANGE_RE = re.compile(
     r".*?(?:から|～|〜|~)\s*"
     r"(?P<ey>20\d{2})年\s*(?P<em>\d{1,2})月\s*(?P<ed>\d{1,2})日"
 )
+REIWA_RANGE_RE = re.compile(
+    r"令和\s*(?P<sy>\d+)年\s*(?P<sm>\d{1,2})月\s*(?P<sd>\d{1,2})日"
+    r".*?(?:から|～|〜|~)\s*"
+    r"令和\s*(?P<ey>\d+)年\s*(?P<em>\d{1,2})月\s*(?P<ed>\d{1,2})日"
+)
 
 
-def fetch_html(url: str = URL, attempts: int = 3) -> str:
+def fetch_html(url: str, attempts: int = 3) -> str:
     last_error: requests.RequestException | None = None
     for attempt in range(1, attempts + 1):
         try:
@@ -41,21 +48,47 @@ def fetch_html(url: str = URL, attempts: int = 3) -> str:
             return r.text
         except requests.RequestException as exc:
             last_error = exc
-            print(f"MIEMU retry {attempt}/{attempts}: {type(exc).__name__}")
+            print(f"MIEMU retry {attempt}/{attempts}: {type(exc).__name__} {url}")
             if attempt < attempts:
                 time.sleep(attempt * 2)
     assert last_error is not None
     raise last_error
 
 
+def _record(title: str, start: date, end: date, official_url: str) -> dict:
+    return {
+        "title": " ".join(title.split()),
+        "start_date": start.isoformat(),
+        "end_date": end.isoformat(),
+        "venue": "三重県総合博物館 MieMu",
+        "prefecture": "三重県",
+        "category": "展示会",
+        "source": "三重県総合博物館 MieMu",
+        "official_url": official_url,
+        "decision": "display",
+        "decision_reason": "三重県総合博物館公式の企画展・特別展",
+    }
+
+
 def _parse_range(text: str) -> tuple[date, date] | None:
-    m = DATE_RANGE_RE.search(" ".join(text.split()))
+    text = " ".join(unicodedata.normalize("NFKC", text).split())
+    m = DATE_RANGE_RE.search(text)
+    if m:
+        try:
+            return (
+                date(int(m.group("sy")), int(m.group("sm")), int(m.group("sd"))),
+                date(int(m.group("ey")), int(m.group("em")), int(m.group("ed"))),
+            )
+        except ValueError:
+            return None
+
+    m = REIWA_RANGE_RE.search(text)
     if not m:
         return None
     try:
         return (
-            date(int(m.group("sy")), int(m.group("sm")), int(m.group("sd"))),
-            date(int(m.group("ey")), int(m.group("em")), int(m.group("ed"))),
+            date(2018 + int(m.group("sy")), int(m.group("sm")), int(m.group("sd"))),
+            date(2018 + int(m.group("ey")), int(m.group("em")), int(m.group("ed"))),
         )
     except ValueError:
         return None
@@ -93,20 +126,29 @@ def parse_exhibitions(page_html: str) -> list[dict]:
         if key in seen:
             continue
         seen.add(key)
-        out.append({
-            "title": title,
-            "start_date": start.isoformat(),
-            "end_date": end.isoformat(),
-            "venue": "三重県総合博物館 MieMu",
-            "prefecture": "三重県",
-            "category": "展示会",
-            "source": "三重県総合博物館 MieMu",
-            "official_url": URL,
-            "decision": "display",
-            "decision_reason": "三重県総合博物館公式の企画展・特別展",
-        })
+        out.append(_record(title, start, end, URL))
 
     return out
+
+
+def parse_prefecture_fallback(page_html: str) -> list[dict]:
+    soup = BeautifulSoup(page_html, "html.parser")
+    h1 = soup.find("h1")
+    if not h1:
+        return []
+    raw_title = " ".join(h1.get_text(" ", strip=True).split())
+    if "三重県総合博物館" not in raw_title or "企画展" not in raw_title:
+        return []
+
+    title = re.sub(r"^〖三重県総合博物館\s*MieMu〗\s*", "", raw_title)
+    title = re.sub(r"^第\d+回企画展\s*", "", title).strip()
+
+    visible = " ".join(soup.stripped_strings)
+    dates = _parse_range(visible)
+    if not title or not dates:
+        return []
+    start, end = dates
+    return [_record(title, start, end, FALLBACK_URL)]
 
 
 def main():
@@ -116,15 +158,32 @@ def main():
     events = json.loads(events_path.read_text(encoding="utf-8"))
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
 
+    parsed: list[dict] = []
+    primary_error: requests.RequestException | None = None
     try:
-        html = fetch_html()
+        parsed = parse_exhibitions(fetch_html(URL))
     except requests.RequestException as exc:
-        print("MIEMU skipped: source unavailable", type(exc).__name__)
-        return
+        primary_error = exc
+        print("MIEMU primary unavailable", type(exc).__name__)
 
-    parsed = parse_exhibitions(html)
     found = [e for e in parsed if e["end_date"] >= today.isoformat()]
     if not found:
+        try:
+            fallback = parse_prefecture_fallback(fetch_html(FALLBACK_URL))
+        except requests.RequestException as exc:
+            if primary_error is not None:
+                print("MIEMU skipped: primary and official fallback unavailable", type(exc).__name__)
+                return
+            print("MIEMU fallback unavailable", type(exc).__name__)
+            fallback = []
+        found = [e for e in fallback if e["end_date"] >= today.isoformat()]
+        if found:
+            print("MIEMU using official prefecture fallback")
+
+    if not found:
+        if primary_error is not None:
+            print("MIEMU skipped: no verified future event from reachable official source")
+            return
         raise RuntimeError("MieMu公式から今後の企画展・特別展を取得できませんでした。")
 
     before = len(events)
