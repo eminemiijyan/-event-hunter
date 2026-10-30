@@ -53,6 +53,7 @@ jobs:
           PYTHONPATH=. python tests/test_suzuka.py
           PYTHONPATH=. python tests/test_nagashima.py
           PYTHONPATH=. python tests/test_miemu.py
+          PYTHONPATH=. python tests/test_mie_culture.py
 
       - name: Fetch core events
         run: PYTHONPATH=. python src/fetch_events_resilient.py
@@ -110,6 +111,9 @@ jobs:
 
       - name: Add MieMu major exhibitions
         run: PYTHONPATH=. python src/append_miemu.py
+
+      - name: Add Mie Culture Hall official events
+        run: PYTHONPATH=. python src/append_mie_culture.py
 
       - name: Refine borderline events
         run: python src/refine_events.py
