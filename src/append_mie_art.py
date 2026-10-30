@@ -144,6 +144,9 @@ def parse_prefecture_listing(page_html: str, official_url: str) -> list[dict]:
             continue
         title = ""
         for candidate in lines[i + 1:min(i + 5, len(lines))]:
+            normalized_candidate = unicodedata.normalize("NFKC", candidate)
+            if SLASH_RANGE_RE.fullmatch(normalized_candidate):
+                break
             if "三重県立美術館" in candidate and "企画展" in candidate:
                 title = candidate
                 break
