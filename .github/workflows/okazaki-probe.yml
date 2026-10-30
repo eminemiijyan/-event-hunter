@@ -18,24 +18,20 @@ jobs:
         run: |
           import requests
           from bs4 import BeautifulSoup
-          from urllib.parse import urljoin
           headers={'User-Agent':'Mozilla/5.0 (compatible; EventHunterPersonal/1.0)','Accept-Language':'ja-JP,ja;q=0.9'}
-          url='https://okazaki-kanko.jp/event/'
-          r=requests.get(url,timeout=30,headers=headers)
-          print('status',r.status_code,'bytes',len(r.content),'ctype',r.headers.get('content-type'))
-          r.raise_for_status()
-          r.encoding=r.apparent_encoding
-          soup=BeautifulSoup(r.text,'html.parser')
-          print('PAGERS',[(a.get_text(' ',strip=True),a.get('href')) for a in soup.find_all('a',href=True) if a.get_text(' ',strip=True) in {'2','3','次へ'}][:20])
-          cards=soup.select('article.spot')
-          print('CARDS',len(cards))
-          print('TITLES',[(c.select_one('h3 a').get_text(' ',strip=True), c.select_one('p.ellipsis').get_text(' ',strip=True) if c.select_one('p.ellipsis') else '') for c in cards[:30]])
-          detail='https://okazaki-kanko.jp/event/676'
-          d=requests.get(detail,timeout=30,headers=headers)
+          for url in ['https://okazaki-kanko.jp/event/','https://okazaki-kanko.jp/page:2','https://okazaki-kanko.jp/page:3']:
+              r=requests.get(url,timeout=30,headers=headers,allow_redirects=True)
+              print('PAGE',url,'status',r.status_code,'final',r.url,'bytes',len(r.content))
+              if r.ok:
+                  r.encoding=r.apparent_encoding
+                  soup=BeautifulSoup(r.text,'html.parser')
+                  cards=soup.select('article.spot')
+                  print(' cards',len(cards),'first',[(c.select_one('h3 a').get_text(' ',strip=True), c.select_one('p.ellipsis').get_text(' ',strip=True) if c.select_one('p.ellipsis') else '') for c in cards[:5]])
+          d=requests.get('https://okazaki-kanko.jp/event/676',timeout=30,headers=headers)
           d.raise_for_status(); d.encoding=d.apparent_encoding
           ds=BeautifulSoup(d.text,'html.parser')
-          print('DETAIL_LABELS')
-          for tag in ds.find_all(['th','dt','td','dd','li','div','p']):
-              txt=' '.join(tag.stripped_strings)
-              if txt.startswith(('開催期間','開催場所','場所','会場')) and len(txt)<500:
-                  print(tag.name,tag.get('class'),txt[:500],str(tag)[:1200])
+          for th in ds.find_all('th'):
+              label=th.get_text(' ',strip=True)
+              if label in {'開催期間','開催場所'}:
+                  td=th.find_next_sibling('td')
+                  print('DETAIL',label,td.get_text(' ',strip=True) if td else None)
