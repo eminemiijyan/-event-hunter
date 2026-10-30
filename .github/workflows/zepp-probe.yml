@@ -1,0 +1,41 @@
+name: Probe Zepp Nagoya
+
+on:
+  push:
+    branches: [probe-zepp]
+    paths:
+      - '.github/workflows/zepp-probe.yml'
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install parser
+        run: pip install beautifulsoup4 requests
+      - name: Inspect Zepp Nagoya schedule structure
+        shell: python
+        run: |
+          import requests
+          from bs4 import BeautifulSoup
+          url='https://www.zepp.co.jp/hall/nagoya/schedule/'
+          r=requests.get(url,timeout=30,headers={'User-Agent':'Mozilla/5.0 (compatible; EventHunterPersonal/1.0)','Accept-Language':'ja-JP,ja;q=0.9'})
+          print('PAGE',r.status_code,len(r.content),r.url)
+          r.raise_for_status(); r.encoding=r.apparent_encoding
+          soup=BeautifulSoup(r.text,'html.parser')
+          for sel in ['article','.schedule-item','.event','.schedule_list li','li']:
+              hits=[]
+              for tag in soup.select(sel):
+                  txt=' '.join(tag.stripped_strings)
+                  if any(k in txt for k in ['甲斐よしひろ','Hump Back','04 Limited Sazabys','ヒルクライム']):
+                      hits.append((sel,tag.name,tag.get('class'),txt[:900],str(tag)[:3500]))
+                      if len(hits)>=8: break
+              if hits:
+                  print('HITS',hits)
+          # Also show links containing likely event detail URLs
+          links=[]
+          for a in soup.find_all('a',href=True):
+              txt=' '.join(a.stripped_strings)
+              if any(k in txt for k in ['甲斐よしひろ','Hump Back','04 Limited Sazabys','ヒルクライム']):
+                  links.append((a.get('class'),txt[:500],a.get('href')))
+          print('LINKS',links[:30])
