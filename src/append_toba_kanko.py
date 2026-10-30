@@ -105,11 +105,39 @@ def _date_from_link_text(text: str) -> tuple[str, str] | None:
     return start.isoformat(), end.isoformat()
 
 
-def _date_from_nearby_list(link) -> tuple[str, str] | None:
-    year: int | None = None
+def _date_from_card(link, default_year: int | None = None) -> tuple[str, str] | None:
+    """Read the M/D label from the smallest ancestor card around an event link.
+
+    The Toba monthly page can place the visible date before or after the anchor in
+    source order, so previous-sibling scanning alone is not reliable.
+    """
+    for parent in link.parents:
+        if getattr(parent, "name", None) in ("body", "html"):
+            break
+        values = [" ".join(s.split()) for s in parent.stripped_strings]
+        md_match = next((MD_RE.fullmatch(v) for v in values if MD_RE.fullmatch(v)), None)
+        if not md_match:
+            continue
+        year = default_year
+        if year is None:
+            ym = next((YEAR_RE.fullmatch(v) for v in values if YEAR_RE.fullmatch(v)), None)
+            if ym:
+                year = int(ym.group(1))
+        if year is None:
+            continue
+        try:
+            d = date(year, int(md_match.group(1)), int(md_match.group(2))).isoformat()
+        except ValueError:
+            continue
+        return d, d
+    return None
+
+
+def _date_from_nearby_list(link, default_year: int | None = None) -> tuple[str, str] | None:
+    year: int | None = default_year
     month: int | None = None
     day: int | None = None
-    for raw in link.find_all_previous(string=True, limit=18):
+    for raw in link.find_all_previous(string=True, limit=80):
         text = " ".join(str(raw).split())
         if not text:
             continue
@@ -117,6 +145,8 @@ def _date_from_nearby_list(link) -> tuple[str, str] | None:
             md = MD_RE.fullmatch(text)
             if md:
                 month, day = int(md.group(1)), int(md.group(2))
+                if year is not None:
+                    break
                 continue
         if year is None:
             ym = YEAR_RE.fullmatch(text)
@@ -150,7 +180,7 @@ def category_for(title: str) -> str:
     return "その他"
 
 
-def parse_listing(page_html: str) -> list[dict]:
+def parse_listing(page_html: str, default_year: int | None = None) -> list[dict]:
     soup = BeautifulSoup(page_html, "html.parser")
     out: list[dict] = []
     seen: set[tuple[str, str]] = set()
@@ -163,7 +193,11 @@ def parse_listing(page_html: str) -> list[dict]:
         title = _title_from_link(text)
         if not title or not _is_target(title):
             continue
-        dates = _date_from_link_text(text) or _date_from_nearby_list(link)
+        dates = (
+            _date_from_link_text(text)
+            or _date_from_card(link, default_year)
+            or _date_from_nearby_list(link, default_year)
+        )
         if not dates:
             continue
         start_date, end_date = dates
@@ -210,7 +244,7 @@ def main():
             print("TOBA_KANKO month unavailable", type(exc).__name__, y, m)
             continue
         reachable += 1
-        parsed = parse_listing(html)
+        parsed = parse_listing(html, default_year=y)
         print("TOBA_KANKO", f"{y}-{m:02d}", "targets", len(parsed))
         found.extend(e for e in parsed if e["end_date"] >= today.isoformat())
 
