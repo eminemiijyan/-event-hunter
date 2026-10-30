@@ -17,6 +17,7 @@ HOME_URL = BASE + "/kaikan/"
 SITE_DIR = Path(__file__).resolve().parents[1] / "site"
 
 MONTH_RE = re.compile(r"(20\d{2})年\s*(\d{1,2})月")
+REIWA_MONTH_RE = re.compile(r"令和\s*(\d{1,2})年\s*(\d{1,2})月")
 DAY_RE = re.compile(r"(\d{1,2})日")
 TIME_ONLY_RE = re.compile(r"^[①②③④⑤⑥⑦⑧⑨⑩\s:：0-9～〜\-・]+$")
 
@@ -53,16 +54,29 @@ def _norm(text: str) -> str:
     return re.sub(r"[^0-9a-z\u3040-\u30ff\u3400-\u9fff]+", "", text)
 
 
+def _parse_year_month(text: str) -> tuple[int, int] | None:
+    m = MONTH_RE.search(text)
+    if m:
+        return int(m.group(1)), int(m.group(2))
+    m = REIWA_MONTH_RE.search(text)
+    if m:
+        reiwa_year, month = int(m.group(1)), int(m.group(2))
+        return reiwa_year + 2018, month
+    return None
+
+
 def discover_month_pages(home_html: str, today: date) -> list[tuple[int, int, str]]:
     soup = BeautifulSoup(home_html, "html.parser")
     out: dict[tuple[int, int], str] = {}
     current_key = today.year * 12 + today.month
     for a in soup.select('a[href*="/kaikan/event/"]'):
         text = a.get_text(" ", strip=True)
-        m = MONTH_RE.search(text)
-        if not m:
+        if "催事案内" not in text or "市民会館" not in text:
             continue
-        year, month = int(m.group(1)), int(m.group(2))
+        ym = _parse_year_month(text)
+        if not ym:
+            continue
+        year, month = ym
         key = year * 12 + month
         if key < current_key:
             continue
@@ -74,13 +88,10 @@ def discover_month_pages(home_html: str, today: date) -> list[tuple[int, int, st
 
 def _page_year_month(soup: BeautifulSoup) -> tuple[int, int] | None:
     for node in soup.find_all(["h1", "h2"]):
-        m = MONTH_RE.search(node.get_text(" ", strip=True))
-        if m:
-            return int(m.group(1)), int(m.group(2))
-    m = MONTH_RE.search(soup.get_text(" ", strip=True))
-    if m:
-        return int(m.group(1)), int(m.group(2))
-    return None
+        ym = _parse_year_month(node.get_text(" ", strip=True))
+        if ym:
+            return ym
+    return _parse_year_month(soup.get_text(" ", strip=True))
 
 
 def _public_title(text: str) -> bool:
