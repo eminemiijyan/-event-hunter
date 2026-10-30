@@ -58,6 +58,8 @@ jobs:
           PYTHONPATH=. python tests/test_ise_kanko.py
           PYTHONPATH=. python tests/test_toba_kanko.py
           PYTHONPATH=. python tests/test_toba_aquarium.py
+          PYTHONPATH=. python tests/test_shima_spain.py
+          PYTHONPATH=. python tests/test_shima_kanko.py
 
       - name: Fetch core events
         run: PYTHONPATH=. python src/fetch_events_resilient.py
@@ -130,6 +132,12 @@ jobs:
 
       - name: Add Toba Aquarium seasonal events
         run: PYTHONPATH=. python src/append_toba_aquarium.py
+
+      - name: Add Shima Spain Village major events
+        run: PYTHONPATH=. python src/append_shima_spain.py
+
+      - name: Add Shima tourism major events
+        run: PYTHONPATH=. python src/append_shima_kanko.py
 
       - name: Refine borderline events
         run: python src/refine_events.py
