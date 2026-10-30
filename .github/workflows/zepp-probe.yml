@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Install parser
         run: pip install beautifulsoup4 requests
-      - name: Inspect Zepp Nagoya schedule structure
+      - name: Inspect Zepp Nagoya month navigation
         shell: python
         run: |
           import requests
@@ -23,19 +23,23 @@ jobs:
           print('PAGE',r.status_code,len(r.content),r.url)
           r.raise_for_status(); r.encoding=r.apparent_encoding
           soup=BeautifulSoup(r.text,'html.parser')
-          for sel in ['article','.schedule-item','.event','.schedule_list li','li']:
-              hits=[]
-              for tag in soup.select(sel):
-                  txt=' '.join(tag.stripped_strings)
-                  if any(k in txt for k in ['甲斐よしひろ','Hump Back','04 Limited Sazabys','ヒルクライム']):
-                      hits.append((sel,tag.name,tag.get('class'),txt[:900],str(tag)[:3500]))
-                      if len(hits)>=8: break
-              if hits:
-                  print('HITS',hits)
-          # Also show links containing likely event detail URLs
-          links=[]
+          nav=[]
           for a in soup.find_all('a',href=True):
+              href=a.get('href','')
               txt=' '.join(a.stripped_strings)
-              if any(k in txt for k in ['甲斐よしひろ','Hump Back','04 Limited Sazabys','ヒルクライム']):
-                  links.append((a.get('class'),txt[:500],a.get('href')))
-          print('LINKS',links[:30])
+              if ('schedule' in href.lower() and ('?' in href or '/2026/' in href or '/11' in href or '/12' in href)) or txt in {'11Nov','12Dec','11','12'}:
+                  nav.append((txt[:120],href))
+          print('NAV',nav[:120])
+          for form in soup.find_all('form'):
+              txt=' '.join(form.stripped_strings)
+              if 'schedule' in str(form).lower() or 'calendar' in txt.lower():
+                  print('FORM',form.get('action'),form.get('method'),str(form)[:5000])
+          # Inspect event anchors around current/next month
+          ev=[]
+          for a in soup.find_all('a',href=True):
+              href=a.get('href','')
+              if '/hall/nagoya/schedule/single/' in href:
+                  ev.append((' '.join(a.stripped_strings)[:700],href))
+          print('EVENT_LINK_COUNT',len(ev))
+          print('EVENT_LINKS_HEAD',ev[:10])
+          print('EVENT_LINKS_TAIL',ev[-10:])
