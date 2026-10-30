@@ -113,12 +113,33 @@ def category_for(title: str) -> str:
     return "その他"
 
 
+def event_nodes(soup: BeautifulSoup):
+    """イベントカードを構造変更に強い順で探す。中身の必須条件は維持する。"""
+    selectors = (
+        "#event_calendar li.news_item",
+        ".box_days li.news_item",
+        "li.news_item",
+    )
+    for selector in selectors:
+        nodes = soup.select(selector)
+        valid = [
+            node
+            for node in nodes
+            if node.select_one("a.has_arrow[href]")
+            and node.select_one(".date")
+            and node.select_one("strong span")
+        ]
+        if valid:
+            return valid
+    return []
+
+
 def parse_month(page_html: str) -> list[dict]:
     soup = BeautifulSoup(page_html, "html.parser")
     out = []
     seen: set[tuple[str, str]] = set()
 
-    for item in soup.select("#event_calendar .box_days li.news_item"):
+    for item in event_nodes(soup):
         anchor = item.select_one("a.has_arrow[href]")
         date_node = item.select_one(".date")
         venue_node = item.select_one(".news_category")
@@ -187,9 +208,19 @@ def main():
 
         successful_months += 1
         soup = BeautifulSoup(html, "html.parser")
-        total_list_items += len(soup.select("#event_calendar .box_days li.news_item"))
+        nodes = event_nodes(soup)
+        total_list_items += len(nodes)
         month_items = parse_month(html)
-        print("OASIS21", f"{year:04d}-{month:02d}", "major", len(month_items))
+        print(
+            "OASIS21",
+            f"{year:04d}-{month:02d}",
+            "cards",
+            len(nodes),
+            "raw_li",
+            len(soup.select("li.news_item")),
+            "major",
+            len(month_items),
+        )
         for item in month_items:
             if item["end_date"] >= today.isoformat():
                 found[(_norm(item["title"]), item["start_date"])] = item
