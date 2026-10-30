@@ -22,14 +22,15 @@ def fetch_html(url: str, attempts: int = 3) -> str:
     for attempt in range(1, attempts + 1):
         try:
             r = requests.get(url, timeout=(10, 45), headers={
-                "User-Agent": "Mozilla/5.0 (compatible; EventHunterPersonal/1.0)",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36",
                 "Accept-Language": "ja-JP,ja;q=0.9,en;q=0.8",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             })
             r.raise_for_status()
             if not r.encoding or r.encoding.lower() == "iso-8859-1":
                 r.encoding = r.apparent_encoding
             return r.text
-        except (requests.Timeout, requests.ConnectionError) as exc:
+        except requests.RequestException as exc:
             last_error = exc
             print(f"GIFU_CULTURE retry {attempt}/{attempts}: {type(exc).__name__} {url}")
             if attempt < attempts:
@@ -40,17 +41,19 @@ def fetch_html(url: str, attempts: int = 3) -> str:
 
 def category_for(title: str) -> str:
     t = unicodedata.normalize("NFKC", title).casefold()
-    if any(w in t for w in ("ライブ", "コンサート", "music", "masterpiece", "音楽", "ダンス")):
+    if any(w in t for w in ("ライブ", "コンサート", "music", "masterpiece", "音楽", "ダンス", "バレエ")):
         return "コンサート・ショー"
     if any(w in t for w in ("祭", "まつり", "フェスタ", "フェス")):
         return "祭り・季節"
-    if any(w in t for w in ("展示", "展覧", "作品展")):
+    if any(w in t for w in ("展示", "展覧", "作品展", "美術展")):
         return "展示会"
+    if any(w in t for w in ("大会", "スポーツ", "ボディビル")):
+        return "スポーツ"
     return "その他"
 
 
 def decision_for(title: str) -> tuple[str, str]:
-    if any(w in title for w in ("転職フェア", "説明会", "講習会")):
+    if any(w in title for w in ("転職フェア", "就職", "進学", "説明会", "講習会", "キャリアガイダンス", "企業展")):
         return "hold", "一般向けだが、お出かけ候補としては用途が限定的なため保留"
     return "display", "岐阜市文化センター公式イベントカレンダー掲載の一般向け催事"
 
@@ -62,17 +65,62 @@ def _venue(first_cell: str) -> str:
     return "岐阜市文化センター"
 
 
+def _month_for_table(table) -> tuple[int, int] | None:
+    # 公式ページでは月見出しのHTMLタグが固定ではないため、直前の文字列を遡って探す。
+    node = table.find_previous(string=lambda s: bool(s and MONTH_HEADING_RE.search(" ".join(str(s).split()))))
+    if node is not None:
+        m = MONTH_HEADING_RE.search(" ".join(str(node).split()))
+        if m:
+            return int(m.group(1)), int(m.group(2))
+
+    # 念のため直前の要素群も走査する。
+    prev = table
+    for _ in range(30):
+        prev = prev.find_previous()
+        if prev is None:
+            break
+        if getattr(prev, "get_text", None):
+            text = " ".join(prev.get_text(" ", strip=True).split())
+            m = MONTH_HEADING_RE.search(text)
+            if m:
+                return int(m.group(1)), int(m.group(2))
+    return None
+
+
+def _dates_for_cell(first: str, year: int, month: int) -> tuple[date, date] | None:
+    # 例: 28日・29日 / 28日～3月4日 の両方に対応。
+    full = re.findall(r"(?:(\d{1,2})月)?(\d{1,2})日", first)
+    if not full:
+        return None
+    values: list[date] = []
+    cur_month = month
+    cur_year = year
+    for month_text, day_text in full:
+        if month_text:
+            new_month = int(month_text)
+            if new_month < cur_month and cur_month == 12:
+                cur_year += 1
+            cur_month = new_month
+        try:
+            values.append(date(cur_year, cur_month, int(day_text)))
+        except ValueError:
+            continue
+    if not values:
+        return None
+    return min(values), max(values)
+
+
 def parse_events(page_html: str) -> list[dict]:
     soup = BeautifulSoup(page_html, "html.parser")
     out: list[dict] = []
-    for heading in soup.find_all(["h2", "h3", "h4"]):
-        m = MONTH_HEADING_RE.search(heading.get_text(" ", strip=True))
-        if not m:
+    seen: set[tuple[str, str]] = set()
+
+    for table in soup.find_all("table"):
+        ym = _month_for_table(table)
+        if not ym:
             continue
-        year, month = map(int, m.groups())
-        table = heading.find_next("table")
-        if not table:
-            continue
+        year, month = ym
+
         for tr in table.find_all("tr"):
             cells = tr.find_all(["td", "th"])
             if len(cells) < 2:
@@ -81,13 +129,12 @@ def parse_events(page_html: str) -> list[dict]:
             title = " ".join(cells[1].get_text(" ", strip=True).split())
             if not title or "催し物名" in title:
                 continue
-            days = [int(x) for x in DAY_RE.findall(first)]
-            if not days:
+            dates = _dates_for_cell(first, year, month)
+            if not dates:
                 continue
-            try:
-                start = date(year, month, min(days))
-                end = date(year, month, max(days))
-            except ValueError:
+            start, end = dates
+            key = (title, start.isoformat())
+            if key in seen:
                 continue
             decision, reason = decision_for(title)
             out.append({
@@ -102,6 +149,7 @@ def parse_events(page_html: str) -> list[dict]:
                 "decision": decision,
                 "decision_reason": reason,
             })
+            seen.add(key)
     return out
 
 
