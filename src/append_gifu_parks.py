@@ -13,7 +13,6 @@ from bs4 import BeautifulSoup
 
 URL = "https://www.city.gifu.lg.jp/info/machizukuri/1007994/1035968/index.html"
 SITE_DIR = Path(__file__).resolve().parents[1] / "site"
-TITLE_RE = re.compile(r"^(.*?)\s*〖([^〗]+)〗\s*$")
 DATE_RE = re.compile(r"(?:(20\d{2})年)?\s*(\d{1,2})月\s*(\d{1,2})日")
 
 
@@ -65,37 +64,69 @@ def _parse_date_block(text: str, base_year: int) -> tuple[date, date] | None:
     return min(values), max(values)
 
 
+def _event_title(line: str) -> tuple[str, str] | None:
+    if "〖" not in line or "〗" not in line:
+        return None
+    before, rest = line.split("〖", 1)
+    title, _ = rest.split("〗", 1)
+    title = title.strip()
+    if not title:
+        return None
+    return before.strip(), title
+
+
 def parse_events(page_html: str, base_year: int) -> list[dict]:
     soup = BeautifulSoup(page_html, "html.parser")
-    main = soup.find("main") or soup
-    lines = [" ".join(s.split()) for s in main.stripped_strings]
+    lines = [" ".join(s.split()) for s in soup.stripped_strings]
+
+    # Only parse the official section explicitly labelled as major park events.
+    start = 0
+    for idx, line in enumerate(lines):
+        if "その他の公園の大型イベント" in line:
+            start = idx + 1
+            break
+
+    end = len(lines)
+    for idx in range(start, len(lines)):
+        if "より良いホームページ" in lines[idx] or "このページに関するお問い合わせ" in lines[idx]:
+            end = idx
+            break
+    lines = lines[start:end]
+
     out: list[dict] = []
     seen: set[tuple[str, str]] = set()
-
     i = 0
     while i < len(lines):
-        m = TITLE_RE.match(lines[i])
-        if not m:
+        parsed = _event_title(lines[i])
+        if not parsed:
             i += 1
             continue
-        venue = m.group(1).strip()
-        title = m.group(2).strip()
+
+        venue, title = parsed
+        if not venue and i > 0:
+            previous = lines[i - 1].strip()
+            if "開催日" not in previous and "〖" not in previous:
+                venue = previous
+
         block: list[str] = []
         j = i + 1
-        while j < len(lines) and not TITLE_RE.match(lines[j]) and len(block) < 8:
+        while j < len(lines) and _event_title(lines[j]) is None and len(block) < 12:
             block.append(lines[j])
             j += 1
-        date_text = " ".join(x for x in block if "開催日" in x or DATE_RE.search(x))
+
+        # Some events list the second day on a separate line, so parse all
+        # explicit M月D日 values until the next event title.
+        date_text = " ".join(block)
         dates = _parse_date_block(date_text, base_year)
         if dates:
-            start, end = dates
-            key = (title, start.isoformat())
+            start_date, end_date = dates
+            key = (title, start_date.isoformat())
             if key not in seen:
                 out.append({
                     "title": title,
-                    "start_date": start.isoformat(),
-                    "end_date": end.isoformat(),
-                    "venue": venue,
+                    "start_date": start_date.isoformat(),
+                    "end_date": end_date.isoformat(),
+                    "venue": venue or "岐阜市内公園",
                     "prefecture": "岐阜県",
                     "category": category_for(title),
                     "source": "岐阜市公園イベント",
