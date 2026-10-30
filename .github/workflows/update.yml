@@ -46,6 +46,8 @@ jobs:
           PYTHONPATH=. python tests/test_zepp_nagoya.py
           PYTHONPATH=. python tests/test_niterra.py
           PYTHONPATH=. python tests/test_aichi_arts.py
+          PYTHONPATH=. python tests/test_gifu_guide.py
+          PYTHONPATH=. python tests/test_gifu_culture.py
 
       - name: Fetch core events
         run: PYTHONPATH=. python src/fetch_events_resilient.py
@@ -82,6 +84,12 @@ jobs:
 
       - name: Add Aichi Arts Theater official events
         run: PYTHONPATH=. python src/append_aichi_arts.py
+
+      - name: Add Gifu tourism guide major events
+        run: PYTHONPATH=. python src/append_gifu_guide.py
+
+      - name: Add Gifu Culture Center public events
+        run: PYTHONPATH=. python src/append_gifu_culture.py
 
       - name: Refine borderline events
         run: python src/refine_events.py
