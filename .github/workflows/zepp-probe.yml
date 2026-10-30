@@ -13,33 +13,18 @@ jobs:
     steps:
       - name: Install parser
         run: pip install beautifulsoup4 requests
-      - name: Inspect Zepp Nagoya month navigation
+      - name: Inspect Zepp Nagoya November event HTML
         shell: python
         run: |
           import requests
           from bs4 import BeautifulSoup
-          url='https://www.zepp.co.jp/hall/nagoya/schedule/'
+          url='https://www.zepp.co.jp/hall/nagoya/schedule/?_y=2026&_m=11'
           r=requests.get(url,timeout=30,headers={'User-Agent':'Mozilla/5.0 (compatible; EventHunterPersonal/1.0)','Accept-Language':'ja-JP,ja;q=0.9'})
           print('PAGE',r.status_code,len(r.content),r.url)
           r.raise_for_status(); r.encoding=r.apparent_encoding
           soup=BeautifulSoup(r.text,'html.parser')
-          nav=[]
-          for a in soup.find_all('a',href=True):
-              href=a.get('href','')
-              txt=' '.join(a.stripped_strings)
-              if ('schedule' in href.lower() and ('?' in href or '/2026/' in href or '/11' in href or '/12' in href)) or txt in {'11Nov','12Dec','11','12'}:
-                  nav.append((txt[:120],href))
-          print('NAV',nav[:120])
-          for form in soup.find_all('form'):
-              txt=' '.join(form.stripped_strings)
-              if 'schedule' in str(form).lower() or 'calendar' in txt.lower():
-                  print('FORM',form.get('action'),form.get('method'),str(form)[:5000])
-          # Inspect event anchors around current/next month
-          ev=[]
-          for a in soup.find_all('a',href=True):
-              href=a.get('href','')
-              if '/hall/nagoya/schedule/single/' in href:
-                  ev.append((' '.join(a.stripped_strings)[:700],href))
-          print('EVENT_LINK_COUNT',len(ev))
-          print('EVENT_LINKS_HEAD',ev[:10])
-          print('EVENT_LINKS_TAIL',ev[-10:])
+          anchors=soup.select('a.sch-content[href*="/hall/nagoya/schedule/single/"]')
+          print('COUNT',len(anchors))
+          for a in anchors[:4]:
+              print('TEXT', ' | '.join(a.stripped_strings)[:1500])
+              print('HTML', str(a)[:6000])
