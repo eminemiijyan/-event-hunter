@@ -61,4 +61,45 @@ assert parse_detail(detail_inline, today) == (
     date(2026, 11, 14),
     "赤水の滝(静岡市葵区・梅ヶ島温泉郷)",
 )
+
+# Ordinary prose containing the word 会場 must never be treated as a venue label.
+detail_museum = '''
+<html><body>
+<dl>
+<dt>開催期間</dt><dd>2026年9月22日（火）～11月15日（日）</dd>
+<dt>開催場所</dt><dd>静岡市美術館</dd>
+</dl>
+<p>ぜひ会場で、ルノワールが描いた光と色彩をお楽しみください。</p>
+</body></html>
+'''
+assert parse_detail(detail_museum, today) == (
+    date(2026, 9, 22),
+    date(2026, 11, 15),
+    "静岡市美術館",
+)
+
+# If no venue label exists, a clearly named major venue in the official page is a safe fallback.
+detail_serizawa = '''
+<html><body>
+<p>開催期間：2026年10月10日（土）～12月13日（日）</p>
+<p>静岡市立芹沢銈介美術館で開催します。ぜひ会場でお楽しみください。</p>
+</body></html>
+'''
+assert parse_detail(detail_serizawa, today) == (
+    date(2026, 10, 10),
+    date(2026, 12, 13),
+    "芹沢銈介美術館",
+)
+
+detail_christmas = '''
+<html><body>
+<p>開催期間：2026年12月12日（土）～12月13日（日）</p>
+<p>ホビーのまち静岡 クリスマスフェスタ2026はツインメッセ静岡で開催します。</p>
+</body></html>
+'''
+assert parse_detail(detail_christmas, today) == (
+    date(2026, 12, 12),
+    date(2026, 12, 13),
+    "ツインメッセ静岡",
+)
 print("PASS")

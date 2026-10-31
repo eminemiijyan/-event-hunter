@@ -26,6 +26,10 @@ TARGET_WORDS = (
 MUSEUM_WORDS = (
     "静岡市美術館", "静岡市歴史博物館", "フェルケール博物館", "芹沢銈介美術館",
 )
+KNOWN_VENUES = (
+    "ツインメッセ静岡", "静岡市美術館", "静岡市歴史博物館", "フェルケール博物館",
+    "芹沢銈介美術館", "久能山東照宮", "駿府城公園",
+)
 EXCLUDE_WORDS = (
     "開催終了", "船宿記念館", "末廣", "着物体験", "置物作り", "ウォーキング",
     "スタンプ", "自転車旅", "ライド", "キャンペーン", "御城印", "講演", "教室",
@@ -78,7 +82,6 @@ def discover_candidates(page_html: str) -> list[tuple[str, str]]:
             continue
         if not DETAIL_RE.search(parsed.path) or url in seen:
             continue
-        # The official list uses h3 for the event name and h4 for the teaser.
         heading = a.find_previous("h3")
         if heading is None:
             continue
@@ -115,12 +118,16 @@ def _inline_labeled_value(soup: BeautifulSoup, labels: tuple[str, ...]) -> str |
     text = unicodedata.normalize("NFKC", " ".join(soup.stripped_strings))
     stop = r"(?=\s*[〖【](?:開催|会場|場所|ライトアップ|観覧|問合|問い合|関連|アクセス|開館|休館|ウェブ|駐車|住所|電話)|$)"
     for label in labels:
-        pattern = rf"[〖【]?\s*{re.escape(label)}\s*[〗】]?\s*[：:]?\s*(.{{2,160}}?){stop}"
-        m = re.search(pattern, text)
-        if m:
-            value = " ".join(m.group(1).split()).strip(" ・、。")
-            if value:
-                return value
+        patterns = (
+            rf"[〖【]\s*{re.escape(label)}\s*[〗】]\s*[：:]?\s*(.{{2,160}}?){stop}",
+            rf"{re.escape(label)}\s*[：:]\s*(.{{2,160}}?){stop}",
+        )
+        for pattern in patterns:
+            m = re.search(pattern, text)
+            if m:
+                value = " ".join(m.group(1).split()).strip(" ・、。")
+                if value:
+                    return value
     return None
 
 
@@ -160,21 +167,21 @@ def parse_detail(page_html: str, today: date) -> tuple[date, date, str] | None:
     dates = parse_dates(date_text, today)
     if not dates:
         return None
-    venue = (
-        _inline_labeled_value(soup, ("開催場所", "会場"))
-        or _labeled_value(soup, ("開催場所", "会場"))
-        or "静岡市"
-    )
+
+    venue = _labeled_value(soup, ("開催場所", "会場")) or _inline_labeled_value(soup, ("開催場所", "会場"))
+    if not venue:
+        full_text = unicodedata.normalize("NFKC", " ".join(soup.stripped_strings))
+        venue = next((name for name in KNOWN_VENUES if name in full_text), "静岡市")
     venue = " ".join(venue.split())[:120]
     return dates[0], dates[1], venue
 
 
 def _fallback_venue(title: str, venue: str) -> str:
-    if venue != "静岡市":
-        return venue
     for museum in MUSEUM_WORDS:
         if museum in title:
-            return museum
+            return venue if museum in venue else museum
+    if venue != "静岡市":
+        return venue
     if "大道芸ワールドカップ" in title:
         return "駿府城公園ほか静岡市内各所"
     if "久能山東照宮" in title:
