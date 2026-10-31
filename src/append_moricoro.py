@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup
 from src.append_aichi_now import append_pickups
 
 SOURCE_URL = "https://www.aichi-koen.com/moricoro/moricoro_event/"
+FALLBACK_URL = "https://www.aichi-koen.com/moricoro/"
 SITE_DIR = Path(__file__).resolve().parents[1] / "site"
 
 MAJOR_WORDS = (
@@ -44,7 +45,7 @@ def fetch_html(url: str = SOURCE_URL, attempts: int = 3) -> str:
             return r.text
         except requests.RequestException as exc:
             last_error = exc
-            print(f"MORICORO retry {attempt}/{attempts}: {type(exc).__name__}")
+            print(f"MORICORO retry {attempt}/{attempts}: {type(exc).__name__} {url}")
             if attempt < attempts:
                 time.sleep(attempt * 2)
     assert last_error is not None
@@ -147,11 +148,20 @@ def main():
     events = json.loads(events_path.read_text(encoding="utf-8"))
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
 
+    used_fallback = False
     try:
-        html = fetch_html()
-    except requests.RequestException as exc:
-        print("MORICORO skipped: source unavailable", type(exc).__name__)
-        return
+        html = fetch_html(SOURCE_URL)
+    except requests.RequestException as primary_exc:
+        print("MORICORO primary unavailable", type(primary_exc).__name__)
+        try:
+            # Same official site. One attempt is enough here; if the host itself is down,
+            # the previous snapshot restoration handles continuity later in the workflow.
+            html = fetch_html(FALLBACK_URL, attempts=1)
+            used_fallback = True
+            print("MORICORO using official homepage fallback")
+        except requests.RequestException as fallback_exc:
+            print("MORICORO skipped: official sources unavailable", type(fallback_exc).__name__)
+            return
 
     found = [e for e in parse_events(html) if e["end_date"] >= today.isoformat()]
     if not found:
@@ -166,6 +176,10 @@ def main():
         "hold": sum(e.get("decision") == "hold" for e in merged),
         "exclude": sum(e.get("decision") == "exclude" for e in merged),
     }
+    if used_fallback:
+        meta.setdefault("degraded_sources", {})["モリコロパーク"] = (
+            "イベント専用ページ取得失敗のため同一公式サイトのトップページを使用"
+        )
     meta.update({
         "updated_at": datetime.now(ZoneInfo("Asia/Tokyo")).isoformat(timespec="minutes"),
         "source_count": len({e.get("source") for e in merged if e.get("source")}),
