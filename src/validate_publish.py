@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 EVENTS_PATH = ROOT / "site" / "events.json"
 META_PATH = ROOT / "site" / "meta.json"
 REFERENCE_PATH = ROOT / "config" / "quality_reference.json"
+SNAPSHOT_PATH = ROOT / ".cache" / "previous_events.json"
 
 REQUIRED_EVENT_FIELDS = (
     "title",
@@ -154,6 +155,28 @@ def duplicate_warnings(events: list[dict]) -> list[str]:
     return sorted(set(warnings))
 
 
+def source_count_drop_warnings(events: list[dict], previous_events: list[dict], today: date) -> list[str]:
+    def counts(items: list[dict]) -> dict[str, int]:
+        result: dict[str, int] = {}
+        for event in items:
+            source = event.get("source")
+            if not source or not _event_is_current(event, today):
+                continue
+            result[str(source)] = result.get(str(source), 0) + 1
+        return result
+
+    current = counts(events)
+    previous = counts(previous_events)
+    warnings: list[str] = []
+    for source, previous_count in sorted(previous.items()):
+        if previous_count < 5:
+            continue
+        current_count = current.get(source, 0)
+        if current_count * 2 < previous_count:
+            warnings.append(f"{source}: 件数急減 前回{previous_count}件→今回{current_count}件")
+    return warnings
+
+
 def restored_source_warnings(meta: dict) -> list[str]:
     restored = meta.get("restored_sources")
     if not isinstance(restored, dict):
@@ -185,6 +208,11 @@ def main() -> None:
     events = json.loads(EVENTS_PATH.read_text(encoding="utf-8"))
     meta = json.loads(META_PATH.read_text(encoding="utf-8"))
     reference = json.loads(REFERENCE_PATH.read_text(encoding="utf-8"))
+    previous_events = (
+        json.loads(SNAPSHOT_PATH.read_text(encoding="utf-8"))
+        if SNAPSHOT_PATH.exists()
+        else []
+    )
 
     integrity_errors = event_integrity_errors(events)
     missing = missing_required_sources(events, reference, today)
@@ -193,6 +221,7 @@ def main() -> None:
         + restored_source_warnings(meta)
         + degraded_source_warnings(meta)
         + duplicate_warnings(events)
+        + source_count_drop_warnings(events, previous_events, today)
     ))
     _write_quality_warnings(meta, warnings)
 
