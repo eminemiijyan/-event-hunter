@@ -1,6 +1,6 @@
 from datetime import date
 
-from src.append_shizuoka_city import discover_candidates, parse_dates, parse_detail
+from src.append_shizuoka_city import _fallback_venue, discover_candidates, parse_dates, parse_detail
 
 listing = '''
 <html><body>
@@ -102,4 +102,12 @@ assert parse_detail(detail_christmas, today) == (
     date(2026, 12, 13),
     "ツインメッセ静岡",
 )
+
+# Multi-site official events must not inherit a venue mentioned in a sub-event section.
+assert _fallback_venue("大道芸ワールドカップ in 静岡2026", "静岡市美術館") == "駿府城公園ほか静岡市内各所"
+assert _fallback_venue("令和8年度 静岡市文化財特別公開", "久能山東照宮") == "静岡市内各所"
+assert _fallback_venue("国宝 久能山東照宮 夜間特別拝観", "静岡市") == "久能山東照宮"
+assert _fallback_venue("ホビーのまち静岡 クリスマスフェスタ2026", "静岡市") == "ツインメッセ静岡"
+assert _fallback_venue("第3回全国プラモデル選手権大会", "静岡市") == "ツインメッセ静岡"
+
 print("PASS")
