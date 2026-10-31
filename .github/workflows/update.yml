@@ -72,6 +72,10 @@ jobs:
           PYTHONPATH=. python tests/test_shizuoka_city.py
           PYTHONPATH=. python tests/test_yaizu_kanko.py
           PYTHONPATH=. python tests/test_publish_quality.py
+          PYTHONPATH=. python tests/test_restore_previous_sources.py
+
+      - name: Snapshot last published events
+        run: PYTHONPATH=. python src/snapshot_previous_events.py
 
       - name: Fetch core events
         run: PYTHONPATH=. python src/fetch_events_resilient.py
@@ -186,6 +190,9 @@ jobs:
 
       - name: Refine borderline events
         run: python src/refine_events.py
+
+      - name: Restore temporarily unavailable sources
+        run: PYTHONPATH=. python src/restore_previous_sources.py
 
       - name: Publish quality gate
         run: PYTHONPATH=. python src/validate_publish.py
