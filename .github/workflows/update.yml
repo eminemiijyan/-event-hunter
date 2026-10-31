@@ -69,6 +69,7 @@ jobs:
           PYTHONPATH=. python tests/test_iwata_kanko.py
           PYTHONPATH=. python tests/test_kakegawa_kanko.py
           PYTHONPATH=. python tests/test_fukuroi_kanko.py
+          PYTHONPATH=. python tests/test_shizuoka_city.py
 
       - name: Fetch core events
         run: PYTHONPATH=. python src/fetch_events_resilient.py
@@ -174,6 +175,9 @@ jobs:
 
       - name: Add Fukuroi tourism major events
         run: PYTHONPATH=. python src/append_fukuroi_kanko.py
+
+      - name: Add Shizuoka City major events
+        run: PYTHONPATH=. python src/append_shizuoka_city.py
 
       - name: Refine borderline events
         run: python src/refine_events.py
