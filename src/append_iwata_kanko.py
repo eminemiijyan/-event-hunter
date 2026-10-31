@@ -27,7 +27,12 @@ TITLE_DATE_RE = re.compile(
     r"(?<!\d)(\d{1,2})/(\d{1,2})"
     r"(?:\s*[～〜~\-]\s*(?:(\d{1,2})/)?(\d{1,2})|\s*[・,，、]\s*(\d{1,2}))?"
 )
+LEADING_TITLE_DATE_RE = re.compile(
+    r"^\s*\d{1,2}/\d{1,2}"
+    r"(?:\s*[～〜~\-]\s*(?:\d{1,2}/)?\d{1,2}|\s*[・,，、]\s*\d{1,2})?\s*"
+)
 JP_DATE_RE = re.compile(r"(?:(20\d{2})年|令和\s*(\d{1,2})年)?\s*(\d{1,2})月\s*(\d{1,2})日")
+DAY_ONLY_END_RE = re.compile(r"(?:[・,，、]|[～〜~\-])\s*(\d{1,2})日")
 
 
 def fetch_html(url: str, attempts: int = 3) -> str:
@@ -54,6 +59,11 @@ def fetch_html(url: str, attempts: int = 3) -> str:
 def _norm(text: str) -> str:
     text = unicodedata.normalize("NFKC", text).casefold()
     return re.sub(r"[^0-9a-z\u3040-\u30ff\u3400-\u9fff]+", "", text)
+
+
+def _clean_title(title: str) -> str:
+    text = unicodedata.normalize("NFKC", " ".join(title.split()))
+    return LEADING_TITLE_DATE_RE.sub("", text).strip()
 
 
 def _is_target(title: str) -> bool:
@@ -110,41 +120,66 @@ def _year_from_match(gregorian: str | None, reiwa: str | None, month: int, today
     return _event_year(month, today)
 
 
-def parse_detail_dates(page_html: str, today: date) -> tuple[date, date] | None:
+def _date_candidates(page_html: str) -> list[str]:
     soup = BeautifulSoup(page_html, "html.parser")
-    text = " ".join(soup.stripped_strings)
-    normalized = unicodedata.normalize("NFKC", text)
-    label_match = re.search(r"(?:開催日(?:時)?|日時|日程|点灯期間|とき)[◆：:\s]*", normalized)
-    scope = normalized[label_match.end(): label_match.end() + 180] if label_match else normalized
-    matches = list(JP_DATE_RE.finditer(scope))
-    if not matches:
-        return None
-    first = matches[0]
-    sm, sd = int(first.group(3)), int(first.group(4))
-    sy = _year_from_match(first.group(1), first.group(2), sm, today)
-    second = matches[1] if len(matches) > 1 else None
-    if second:
-        em, ed = int(second.group(3)), int(second.group(4))
-        ey = _year_from_match(second.group(1), second.group(2), em, today)
-        if not second.group(1) and not second.group(2) and em < sm:
-            ey = sy + 1
-    else:
-        em, ed, ey = sm, sd, sy
-    try:
-        return date(sy, sm, sd), date(ey, em, ed)
-    except ValueError:
-        return None
+    lines = [unicodedata.normalize("NFKC", " ".join(line.split())) for line in soup.get_text("\n", strip=True).splitlines()]
+    candidates: list[str] = []
+    for i, line in enumerate(lines):
+        if re.search(r"(?:開催日(?:時)?|日時|日程|点灯期間|とき)", line):
+            candidates.append(line)
+            if i + 1 < len(lines):
+                candidates.append(f"{line} {lines[i + 1]}")
+    return candidates or lines
+
+
+def parse_detail_dates(page_html: str, today: date) -> tuple[date, date] | None:
+    for candidate in _date_candidates(page_html):
+        matches = list(JP_DATE_RE.finditer(candidate))
+        if not matches:
+            continue
+        first = matches[0]
+        sm, sd = int(first.group(3)), int(first.group(4))
+        sy = _year_from_match(first.group(1), first.group(2), sm, today)
+        second = matches[1] if len(matches) > 1 else None
+        if second:
+            em, ed = int(second.group(3)), int(second.group(4))
+            ey = _year_from_match(second.group(1), second.group(2), em, today)
+            if not second.group(1) and not second.group(2) and em < sm:
+                ey = sy + 1
+        else:
+            tail = candidate[first.end():]
+            day_only = DAY_ONLY_END_RE.search(tail)
+            if day_only:
+                em, ed, ey = sm, int(day_only.group(1)), sy
+            else:
+                em, ed, ey = sm, sd, sy
+        try:
+            return date(sy, sm, sd), date(ey, em, ed)
+        except ValueError:
+            continue
+    return None
 
 
 def parse_detail_venue(page_html: str) -> str | None:
     soup = BeautifulSoup(page_html, "html.parser")
-    text = " ".join(soup.stripped_strings)
-    normalized = unicodedata.normalize("NFKC", text)
-    m = re.search(r"(?:開催場所|会場|場所)[◆：:\s]*([^◆\n]{2,80}?)(?=(?:時間|日時|お問い合わせ|問合せ|$))", normalized)
-    if not m:
-        return None
-    venue = " ".join(m.group(1).split()).strip(" ・、。")
-    return venue or None
+    lines = [unicodedata.normalize("NFKC", " ".join(line.split())) for line in soup.get_text("\n", strip=True).splitlines()]
+    for i, line in enumerate(lines):
+        m = re.search(r"(?:開催場所|会場|場所)[◆：:\s]*(.+)$", line)
+        if m and m.group(1).strip():
+            venue = m.group(1).strip(" ・、。")
+            return venue or None
+        if line.rstrip("◆：:") in ("開催場所", "会場", "場所") and i + 1 < len(lines):
+            venue = lines[i + 1].strip(" ・、。")
+            if venue:
+                return venue
+    return None
+
+
+def _fallback_venue_from_title(title: str) -> str:
+    clean = _clean_title(title)
+    if "磐田駅北口多目的広場" in clean:
+        return "磐田駅北口多目的広場"
+    return "磐田市"
 
 
 def category_for(title: str) -> str:
@@ -182,7 +217,7 @@ def main():
     failed_details = 0
     for title, url in articles[:30]:
         dates = parse_title_dates(title, today)
-        venue = "磐田市"
+        venue = _fallback_venue_from_title(title)
         detail = None
         try:
             detail = fetch_html(url, attempts=2)
@@ -197,13 +232,14 @@ def main():
         start, end = dates
         if end < today:
             continue
+        clean_title = _clean_title(title)
         found.append({
-            "title": title,
+            "title": clean_title,
             "start_date": start.isoformat(),
             "end_date": end.isoformat(),
             "venue": venue,
             "prefecture": "静岡県",
-            "category": category_for(title),
+            "category": category_for(clean_title),
             "source": "磐田市観光協会",
             "official_url": url,
             "decision": "display",
