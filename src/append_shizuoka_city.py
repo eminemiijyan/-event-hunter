@@ -177,17 +177,17 @@ def parse_detail(page_html: str, today: date) -> tuple[date, date, str] | None:
 
 
 def _fallback_venue(title: str, venue: str) -> str:
+    if "大道芸ワールドカップ" in title:
+        return "駿府城公園ほか静岡市内各所"
+    if "文化財特別公開" in title:
+        return "静岡市内各所"
+    if "久能山東照宮" in title:
+        return "久能山東照宮"
+    if "クリスマスフェスタ" in title or "全国プラモデル選手権" in title:
+        return "ツインメッセ静岡"
     for museum in MUSEUM_WORDS:
         if museum in title:
             return venue if museum in venue else museum
-    if venue != "静岡市":
-        return venue
-    if "大道芸ワールドカップ" in title:
-        return "駿府城公園ほか静岡市内各所"
-    if "久能山東照宮" in title:
-        return "久能山東照宮"
-    if "文化財特別公開" in title:
-        return "静岡市内各所"
     return venue
 
 

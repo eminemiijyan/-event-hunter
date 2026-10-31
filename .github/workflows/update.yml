@@ -70,6 +70,7 @@ jobs:
           PYTHONPATH=. python tests/test_kakegawa_kanko.py
           PYTHONPATH=. python tests/test_fukuroi_kanko.py
           PYTHONPATH=. python tests/test_shizuoka_city.py
+          PYTHONPATH=. python tests/test_publish_quality.py
 
       - name: Fetch core events
         run: PYTHONPATH=. python src/fetch_events_resilient.py
@@ -181,6 +182,9 @@ jobs:
 
       - name: Refine borderline events
         run: python src/refine_events.py
+
+      - name: Publish quality gate
+        run: PYTHONPATH=. python src/validate_publish.py
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
