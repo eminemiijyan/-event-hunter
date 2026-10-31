@@ -6,6 +6,7 @@ from src.validate_publish import (
     duplicate_warnings,
     event_integrity_errors,
     missing_required_sources,
+    reference_expiry_warnings,
     restored_source_warnings,
     source_count_drop_warnings,
 )
@@ -32,6 +33,11 @@ assert missing_required_sources(events, reference, today) == ["source-b"]
 warnings = coverage_warnings(events, reference, today)
 assert "source-a: 最新取得日 2026-11-02 / 基準 2026-11-30" in warnings
 assert "source-c: 取得できていません / 基準 2027-02-28" in warnings
+
+assert reference_expiry_warnings(reference, today) == [
+    "expired-source: 品質基準期限切れ 2026-10-01（基準更新が必要）"
+]
+assert reference_expiry_warnings(reference, date(2026, 10, 1)) == []
 
 events.append({"source": "source-b", "start_date": "2026-12-01", "end_date": "2026-12-31"})
 assert missing_required_sources(events, reference, today) == []
