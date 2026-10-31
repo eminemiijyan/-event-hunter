@@ -22,6 +22,15 @@ def _event_is_current(event: dict, today: date) -> bool:
         return False
 
 
+def _monitored_sources(reference: dict) -> dict[str, str]:
+    monitored: dict[str, str] = {}
+    for section in ("required_sources", "warn_sources"):
+        values = reference.get(section, {})
+        if isinstance(values, dict):
+            monitored.update({str(source): str(valid_until) for source, valid_until in values.items()})
+    return monitored
+
+
 def restore_missing_required_sources(
     current_events: list[dict],
     previous_events: list[dict],
@@ -36,7 +45,7 @@ def restore_missing_required_sources(
     restored: dict[str, int] = {}
     result = list(current_events)
 
-    for source, valid_until_raw in reference.get("required_sources", {}).items():
+    for source, valid_until_raw in _monitored_sources(reference).items():
         try:
             valid_until = date.fromisoformat(valid_until_raw)
         except (TypeError, ValueError):
