@@ -4,10 +4,20 @@ from src.append_yaizu_kanko import discover_monthly_pages, parse_dates, parse_ev
 
 category_html = '''
 <html><body>
-<a href="/news/9942">〖2026年10月〗焼津の行事・イベントご紹介</a>
-<a href="/news/10028">〖2026年11月〗焼津の行事・イベント</a>
-<a href="/news/9800">2026年9月の焼津のイベントご紹介</a>
-<a href="/news/11000">〖2027年4月〗焼津の行事・イベント</a>
+<article>
+  <a href="/news/9942"><img alt="サムネイル画像"></a>
+  <div>イベント2026.09.22〖2026年10月〗焼津の行事・イベントご紹介</div>
+</article>
+<article>
+  <a href="/news/10028"><img alt="サムネイル画像"></a>
+  <div>イベント2026.10.22〖2026年11月〗焼津の行事・イベント</div>
+</article>
+<article>
+  <a href="/news/9800">2026年9月の焼津のイベントご紹介</a>
+</article>
+<article>
+  <a href="/news/11000">〖2027年4月〗焼津の行事・イベント</a>
+</article>
 </body></html>
 '''
 assert discover_monthly_pages(category_html, date(2026, 10, 31)) == [
