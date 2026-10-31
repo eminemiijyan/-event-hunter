@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import re
-import time
 import unicodedata
 from datetime import date, datetime
 from pathlib import Path
@@ -39,13 +38,13 @@ SMALL_OR_PRIVATE_WORDS = (
 )
 
 
-def fetch_html(url: str, attempts: int = 3) -> str:
+def fetch_html(url: str, attempts: int = 1) -> str:
     last_error: requests.RequestException | None = None
     for attempt in range(1, attempts + 1):
         try:
             r = requests.get(
                 url,
-                timeout=(10, 45),
+                timeout=(8, 20),
                 headers={
                     "User-Agent": "Mozilla/5.0 (compatible; EventHunterPersonal/1.0)",
                     "Accept-Language": "ja-JP,ja;q=0.9,en;q=0.8",
@@ -58,8 +57,6 @@ def fetch_html(url: str, attempts: int = 3) -> str:
         except requests.RequestException as exc:
             last_error = exc
             print(f"FUKIAGE retry {attempt}/{attempts}: {type(exc).__name__} {url}")
-            if attempt < attempts:
-                time.sleep(attempt * 2)
     assert last_error is not None
     raise last_error
 
@@ -200,6 +197,7 @@ def main() -> None:
     found: list[dict] = []
     reachable = 0
     failed_months = 0
+    consecutive_failures = 0
     used_homepage_fallback = False
     for year, month in month_pairs(today):
         url = LIST_URL.format(year=year, month=month)
@@ -207,8 +205,13 @@ def main() -> None:
             html = fetch_html(url)
         except requests.RequestException as exc:
             failed_months += 1
+            consecutive_failures += 1
             print("FUKIAGE month unavailable", type(exc).__name__, year, month)
+            if consecutive_failures >= 2:
+                print("FUKIAGE stopping monthly fetch after consecutive failures")
+                break
             continue
+        consecutive_failures = 0
         reachable += 1
         parsed = parse_events(html, year, url)
         future = [e for e in parsed if e["end_date"] >= today.isoformat()]
@@ -217,7 +220,7 @@ def main() -> None:
 
     if not reachable:
         try:
-            home_html = fetch_html(HOME_URL, attempts=1)
+            home_html = fetch_html(HOME_URL)
             found = [
                 e for e in parse_events(home_html, today.year, HOME_URL)
                 if e["end_date"] >= today.isoformat()
