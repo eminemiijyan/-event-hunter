@@ -172,11 +172,13 @@ def main():
 
     found: list[dict] = []
     reachable = 0
+    failed_months = 0
     for y, m in month_pairs(today):
         url = f"{BASE}/event/?s_month={m}&s_year={y}"
         try:
             html = fetch_html(url)
         except requests.RequestException as exc:
+            failed_months += 1
             print("ISE_KANKO month unavailable", type(exc).__name__, y, m)
             continue
         reachable += 1
@@ -193,14 +195,16 @@ def main():
         unique[(_norm(item["title"]), item["start_date"])] = item
     found = list(unique.values())
 
+    failed_details = 0
     for item in found:
         try:
             detail = fetch_html(item["official_url"], attempts=2)
             venue = parse_detail_venue(detail)
             if venue:
                 item["venue"] = venue
-        except requests.RequestException:
-            pass
+        except requests.RequestException as exc:
+            failed_details += 1
+            print("ISE_KANKO detail unavailable", type(exc).__name__, item["official_url"])
 
     before = len(events)
     for item in sorted(found, key=lambda e: (e["start_date"], e["title"])):
@@ -210,6 +214,13 @@ def main():
     events_path.write_text(json.dumps(events, ensure_ascii=False, indent=2), encoding="utf-8")
 
     counts = {k: sum(e.get("decision") == k for e in events) for k in ("display", "hold", "exclude")}
+    degradation: list[str] = []
+    if failed_months:
+        degradation.append(f"月別ページ {failed_months}/{MONTHS_AHEAD}件取得失敗")
+    if failed_details:
+        degradation.append(f"詳細ページ {failed_details}/{len(found)}件取得失敗（会場は一覧の既定値）")
+    if degradation:
+        meta.setdefault("degraded_sources", {})["伊勢市観光協会"] = " / ".join(degradation)
     meta.update({
         "updated_at": datetime.now(ZoneInfo("Asia/Tokyo")).isoformat(timespec="minutes"),
         "source_count": len({e.get("source") for e in events if e.get("source")}),
@@ -217,7 +228,7 @@ def main():
         "decision_counts": counts,
     })
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
-    print("ISE_KANKO found", len(found), "added", len(events) - before)
+    print("ISE_KANKO found", len(found), "added", len(events) - before, "failed_months", failed_months, "failed_details", failed_details)
     print("DONE", len(events), counts, "sources", meta["source_count"])
 
 

@@ -2,10 +2,12 @@ from datetime import date
 
 from src.validate_publish import (
     coverage_warnings,
+    degraded_source_warnings,
     duplicate_warnings,
     event_integrity_errors,
     missing_required_sources,
     restored_source_warnings,
+    source_count_drop_warnings,
 )
 
 reference = {
@@ -68,5 +70,16 @@ assert restored_source_warnings({"restored_sources": {"モリコロパーク": 5
     "モリコロパーク: 今回取得失敗のため前回データ 5件を復元"
 ]
 assert restored_source_warnings({}) == []
+
+assert degraded_source_warnings({"degraded_sources": {"伊勢市観光協会": "詳細ページ 1/4件取得失敗"}}) == [
+    "伊勢市観光協会: 詳細ページ 1/4件取得失敗"
+]
+assert degraded_source_warnings({}) == []
+
+previous = [dict(valid, title=f"E{i}", source="公式X") for i in range(6)]
+current = [dict(valid, title=f"E{i}", source="公式X") for i in range(2)]
+assert source_count_drop_warnings(current, previous, today) == ["公式X: 件数急減 前回6件→今回2件"]
+assert source_count_drop_warnings(previous[:4], previous[:4], today) == []
+assert source_count_drop_warnings(previous[:3], previous, today) == []
 
 print("PASS")
