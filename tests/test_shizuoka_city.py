@@ -5,15 +5,15 @@ from src.append_shizuoka_city import discover_candidates, parse_dates, parse_det
 listing = '''
 <html><body>
 <h3>大道芸ワールドカップ in 静岡2026</h3>
-<div><a href="/event/detail_690.html">詳細を見る</a></div>
+<div><a href="detail_690.html">詳細を見る</a></div>
 <h3>清水港船宿記念館「次郎長映画を楽しむ」</h3>
-<div><a href="/event/detail_702.html">詳細を見る</a></div>
+<div><a href="detail_702.html">詳細を見る</a></div>
 <h3>静岡市美術館　わたしたちのルノワール</h3>
-<div><a href="/event/detail_669.html">詳細を見る</a></div>
+<div><a href="detail_669.html">詳細を見る</a></div>
 <h3>日帰りの自転車旅♪「オクシズの赤鬼ライド」</h3>
-<div><a href="/event/detail_707.html">詳細を見る</a></div>
+<div><a href="detail_707.html">詳細を見る</a></div>
 <h3>ホビーのまち静岡　クリスマスフェスタ2026</h3>
-<div><a href="/event/detail_706.html">詳細を見る</a></div>
+<div><a href="detail_706.html">詳細を見る</a></div>
 </body></html>
 '''
 assert discover_candidates(listing) == [
