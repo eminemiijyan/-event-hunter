@@ -64,7 +64,7 @@ def _is_target(title: str) -> bool:
         return False
     if any(w.casefold() in title.casefold() for w in TARGET_WORDS):
         return True
-    return any(w in title for w in MUSEUM_WORDS) and any(w in title for w in ("展", "展示"))
+    return any(w in title for w in MUSEUM_WORDS)
 
 
 def discover_candidates(page_html: str) -> list[tuple[str, str]]:
