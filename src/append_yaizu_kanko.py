@@ -216,14 +216,18 @@ def parse_events(page_html: str, page_url: str, article_year: int, article_month
         inline = _line_after_label(line, "開催期間")
         if inline:
             date_parts.append(inline)
-        for pos in range(i + 1, min(len(lines), i + 5)):
-            nxt = lines[pos]
-            if nxt.startswith("場所"):
-                break
-            if nxt.startswith("※"):
-                continue
-            if JP_DATE_RE.search(nxt):
-                date_parts.append(nxt)
+        date_count = len(JP_DATE_RE.findall(" ".join(date_parts)))
+        if date_count < 2:
+            for pos in range(i + 1, min(len(lines), i + 5)):
+                nxt = lines[pos]
+                if nxt.startswith("場所"):
+                    break
+                if nxt.startswith("※"):
+                    continue
+                if JP_DATE_RE.search(nxt):
+                    date_parts.append(nxt)
+                    if len(JP_DATE_RE.findall(" ".join(date_parts))) >= 2:
+                        break
         dates = parse_dates(" ".join(date_parts), article_year, article_month)
         if not dates:
             continue
