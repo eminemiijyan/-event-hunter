@@ -101,6 +101,24 @@ def coverage_warnings(events: list[dict], reference: dict, today: date) -> list[
     return sorted(set(warnings))
 
 
+def reference_expiry_warnings(reference: dict, today: date) -> list[str]:
+    warnings: list[str] = []
+    for section in ("required_sources", "warn_sources"):
+        values = reference.get(section, {})
+        if not isinstance(values, dict):
+            continue
+        for source, valid_until_raw in values.items():
+            try:
+                valid_until = date.fromisoformat(str(valid_until_raw))
+            except ValueError:
+                continue
+            if valid_until < today:
+                warnings.append(
+                    f"{source}: 品質基準期限切れ {valid_until.isoformat()}（基準更新が必要）"
+                )
+    return sorted(set(warnings))
+
+
 def event_integrity_errors(events: list[dict]) -> list[str]:
     errors: list[str] = []
     for index, event in enumerate(events):
@@ -218,6 +236,7 @@ def main() -> None:
     missing = missing_required_sources(events, reference, today)
     warnings = sorted(set(
         coverage_warnings(events, reference, today)
+        + reference_expiry_warnings(reference, today)
         + restored_source_warnings(meta)
         + degraded_source_warnings(meta)
         + duplicate_warnings(events)
