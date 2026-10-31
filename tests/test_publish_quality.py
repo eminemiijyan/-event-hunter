@@ -2,6 +2,7 @@ from datetime import date
 
 from src.validate_publish import (
     coverage_warnings,
+    degraded_source_warnings,
     duplicate_warnings,
     event_integrity_errors,
     missing_required_sources,
@@ -68,5 +69,10 @@ assert restored_source_warnings({"restored_sources": {"モリコロパーク": 5
     "モリコロパーク: 今回取得失敗のため前回データ 5件を復元"
 ]
 assert restored_source_warnings({}) == []
+
+assert degraded_source_warnings({"degraded_sources": {"伊勢市観光協会": "詳細ページ 1/4件取得失敗"}}) == [
+    "伊勢市観光協会: 詳細ページ 1/4件取得失敗"
+]
+assert degraded_source_warnings({}) == []
 
 print("PASS")
