@@ -72,7 +72,7 @@ def discover_candidates(page_html: str) -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
     seen: set[str] = set()
     for a in soup.find_all("a", href=True):
-        url = urljoin(BASE, a["href"])
+        url = urljoin(LIST_URL, a["href"])
         parsed = urlparse(url)
         if parsed.netloc not in ("visit-shizuoka.com", "www.visit-shizuoka.com"):
             continue
