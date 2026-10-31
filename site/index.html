@@ -13,6 +13,7 @@ h1{font-size:22px;margin:0 0 10px}.controls{display:flex;gap:8px;overflow-x:auto
 button{border:1px solid #ccc;background:white;border-radius:999px;padding:8px 13px;white-space:nowrap;font-size:14px}
 button.active{background:#111;color:white;border-color:#111}
 main{max-width:760px;margin:auto;padding:12px 12px 80px}.status{font-size:13px;color:#666;margin:6px 2px 12px}
+.quality-warning{font-size:13px;line-height:1.45;background:#fff3cd;border:1px solid #f0d98a;border-radius:12px;padding:10px 12px;margin:0 0 12px}
 .card{display:block;background:white;border-radius:16px;padding:14px 15px;margin:10px 0;text-decoration:none;color:inherit;box-shadow:0 1px 4px rgba(0,0,0,.08)}
 .card.hold{opacity:.8}.date{font-size:13px;font-weight:700;margin-bottom:7px}.title{font-size:18px;font-weight:750;line-height:1.35}
 .meta{margin-top:8px;font-size:14px;color:#555;line-height:1.5}.tag{display:inline-block;margin-top:9px;margin-right:5px;background:#eee;border-radius:999px;padding:4px 9px;font-size:12px}
@@ -36,6 +37,7 @@ main{max-width:760px;margin:auto;padding:12px 12px 80px}.status{font-size:13px;c
 </header>
 <main>
   <div class="status" id="status">読み込み中…</div>
+  <div class="quality-warning" id="quality-warning" hidden></div>
   <div id="events"></div>
 </main>
 <footer id="footer"></footer>
@@ -92,6 +94,13 @@ function render(){
 async function init(){
   const [ev,meta]=await Promise.all([fetch("./events.json"),fetch("./meta.json")]);
   allEvents=await ev.json(); const m=await meta.json();
+
+  const warnings=Array.isArray(m.quality_warnings)?m.quality_warnings:[];
+  const warningBox=document.querySelector("#quality-warning");
+  if(warnings.length){
+    warningBox.hidden=false;
+    warningBox.textContent=`情報源の確認が必要です：${warnings.join(" / ")}`;
+  }
 
   const prefs=["すべて",...new Set(allEvents.filter(e=>e.decision!=="exclude").map(e=>e.prefecture).filter(Boolean))];
   const pbox=document.querySelector("#prefectures");
