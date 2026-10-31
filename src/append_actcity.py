@@ -4,7 +4,7 @@ import json
 import re
 import time
 import unicodedata
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urljoin
 from zoneinfo import ZoneInfo
@@ -18,8 +18,8 @@ MONTHS_AHEAD = 6
 DETAIL_RE = re.compile(r"/event/detail/\?id=\d+")
 DATE_RE = re.compile(r"(?<!\d)(\d{1,2})/(\d{1,2})(?!\d)")
 EXCLUDE_WORDS = (
-    "就職", "転職", "説明会", "講座", "研修", "セミナー", "ミニコンサート",
-    "公開レッスン", "発表会", "定期演奏会", "練習", "リハーサル",
+    "就職", "転職", "就活", "説明会", "講座", "研修", "セミナー", "ミニコンサート",
+    "公開レッスン", "発表会", "定期演奏会", "練習", "リハーサル", "暴力追放", "薬物乱用",
 )
 MIDDLE_HALL_MAJOR = (
     "全国", "国際", "フェス", "コンクール", "オーケストラ", "ツアー", "コンサート",
@@ -143,6 +143,27 @@ def parse_month(page_html: str, year: int) -> list[dict]:
     return sorted(out, key=lambda e: (e["start_date"], e["title"]))
 
 
+def collapse_contiguous(items: list[dict]) -> list[dict]:
+    grouped: dict[tuple[str, str], list[dict]] = {}
+    for item in items:
+        grouped.setdefault((_norm(item.get("title", "")), item.get("venue", "")), []).append(item)
+
+    out: list[dict] = []
+    for group in grouped.values():
+        group.sort(key=lambda e: (e["start_date"], e["end_date"]))
+        current = dict(group[0])
+        for item in group[1:]:
+            current_end = date.fromisoformat(current["end_date"])
+            next_start = date.fromisoformat(item["start_date"])
+            if next_start <= current_end + timedelta(days=1):
+                current["end_date"] = max(current["end_date"], item["end_date"])
+            else:
+                out.append(current)
+                current = dict(item)
+        out.append(current)
+    return sorted(out, key=lambda e: (e["start_date"], e["title"]))
+
+
 def _same_event(existing: dict, candidate: dict) -> bool:
     if existing.get("prefecture") != "静岡県" or existing.get("start_date") != candidate.get("start_date"):
         return False
@@ -175,9 +196,9 @@ def main():
     unique: dict[tuple[str, str], dict] = {}
     for item in found:
         unique[(_norm(item["title"]), item["start_date"])] = item
-    found = list(unique.values())
+    found = collapse_contiguous(list(unique.values()))
     before = len(events)
-    for item in sorted(found, key=lambda e: (e["start_date"], e["title"])):
+    for item in found:
         if not any(_same_event(existing, item) for existing in events):
             events.append(item)
     events.sort(key=lambda e: (e.get("start_date", ""), e.get("title", "")))
