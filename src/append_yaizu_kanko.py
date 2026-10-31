@@ -105,6 +105,7 @@ def discover_monthly_pages(category_html: str, today: date) -> list[tuple[int, i
 
 def parse_dates(text: str, default_year: int, default_month: int) -> tuple[date, date] | None:
     normalized = unicodedata.normalize("NFKC", text)
+    normalized = re.sub(r"\d+\s*日限定開催", "", normalized)
     normalized = re.split(r"(?:予備日|※当初日程)", normalized, maxsplit=1)[0]
     matches = list(JP_DATE_RE.finditer(normalized))
     if not matches:
