@@ -1,6 +1,12 @@
 from datetime import date
 
-from src.validate_publish import coverage_warnings, missing_required_sources
+from src.validate_publish import (
+    coverage_warnings,
+    duplicate_warnings,
+    event_integrity_errors,
+    missing_required_sources,
+    restored_source_warnings,
+)
 
 reference = {
     "required_sources": {
@@ -31,5 +37,36 @@ assert missing_required_sources(events, reference, today) == []
 events.append({"source": "source-a", "start_date": "2026-11-30", "end_date": "2026-11-30"})
 events.append({"source": "source-c", "start_date": "2027-02-28", "end_date": "2027-02-28"})
 assert coverage_warnings(events, reference, today) == []
+
+valid = {
+    "title": "大型イベント",
+    "start_date": "2026-11-01",
+    "end_date": "2026-11-03",
+    "venue": "会場A",
+    "prefecture": "愛知県",
+    "category": "展示会",
+    "source": "公式A",
+    "official_url": "https://example.test/event-a",
+    "decision": "display",
+}
+assert event_integrity_errors([valid]) == []
+
+bad_date = dict(valid, title="日付逆転", start_date="2026-11-03", end_date="2026-11-01")
+assert event_integrity_errors([bad_date]) == ["日付逆転: 終了日が開始日より前 2026-11-03〜2026-11-01"]
+
+missing_venue = dict(valid, title="会場なし", venue="")
+assert event_integrity_errors([missing_venue]) == ["会場なし: 必須項目欠落 venue"]
+
+bad_decision = dict(valid, title="判定不正", decision="maybe")
+assert event_integrity_errors([bad_decision]) == ["判定不正: decision不正 maybe"]
+
+other_source = dict(valid, source="公式B", official_url="https://example.test/event-b")
+dupes = duplicate_warnings([valid, other_source])
+assert dupes == ["重複候補: 大型イベント / 2026-11-01 / 情報源 公式A・公式B"]
+
+assert restored_source_warnings({"restored_sources": {"モリコロパーク": 5}}) == [
+    "モリコロパーク: 今回取得失敗のため前回データ 5件を復元"
+]
+assert restored_source_warnings({}) == []
 
 print("PASS")
