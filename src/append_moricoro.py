@@ -26,21 +26,19 @@ SKIP_WORDS = (
 ISO_DATE_RE = re.compile(r"(20\d{2})-(\d{2})-(\d{2})")
 
 
-def fetch_html(url: str = SOURCE_URL, attempts: int = 3) -> str:
+def fetch_html(url: str = SOURCE_URL, attempts: int = 2) -> str:
     last_error: requests.RequestException | None = None
     for attempt in range(1, attempts + 1):
         try:
             r = requests.get(
                 url,
-                timeout=(10, 45),
+                timeout=(8, 20),
                 headers={
                     "User-Agent": "Mozilla/5.0 (compatible; EventHunterPersonal/0.9)",
                     "Accept-Language": "ja-JP,ja;q=0.9,en;q=0.8",
                 },
             )
             r.raise_for_status()
-            # The site declares UTF-8. Do not replace it with apparent_encoding,
-            # which can mis-detect Japanese pages and corrupt event titles.
             r.encoding = "utf-8"
             return r.text
         except requests.RequestException as exc:
@@ -154,8 +152,6 @@ def main():
     except requests.RequestException as primary_exc:
         print("MORICORO primary unavailable", type(primary_exc).__name__)
         try:
-            # Same official site. One attempt is enough here; if the host itself is down,
-            # the previous snapshot restoration handles continuity later in the workflow.
             html = fetch_html(FALLBACK_URL, attempts=1)
             used_fallback = True
             print("MORICORO using official homepage fallback")
