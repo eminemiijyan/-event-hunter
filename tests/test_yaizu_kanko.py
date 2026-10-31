@@ -87,4 +87,19 @@ assert events[2]["end_date"] == "2026-11-15"
 assert events[3]["end_date"] == "2027-01-31"
 assert events[4]["end_date"] == "2026-11-29"
 assert all(e["source"] == "焼津市観光協会" for e in events)
+
+exhibit_html = '''
+<html><body>
+<p>秋の特別展「ピラミッド大探検〜砂漠に眠る黄金を探せ〜」</p>
+<div>開催期間</div><div>2026年9月3日（木）〜 2026年11月23日（月・祝）</div>
+<div>平日・9月19日（土）～9月23日（水・祝） 9:00～16:30</div>
+<div>土日祝 10:00～17:30</div>
+<div>場所</div><div>ディスカバリーパーク焼津天文科学館 プラネタリウム</div>
+</body></html>
+'''
+exhibit = parse_events(exhibit_html, "https://www.yaizu.gr.jp/news/10028", 2026, 11, date(2026, 10, 31))
+assert len(exhibit) == 1
+assert exhibit[0]["start_date"] == "2026-09-03"
+assert exhibit[0]["end_date"] == "2026-11-23"
+
 print("PASS")
