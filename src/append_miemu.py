@@ -170,6 +170,7 @@ def main():
 
     parsed: list[dict] = []
     primary_error: requests.RequestException | None = None
+    used_fallback = False
     try:
         parsed = parse_exhibitions(fetch_html(URL))
     except requests.RequestException as exc:
@@ -188,6 +189,7 @@ def main():
             fallback = []
         found = [e for e in fallback if e["end_date"] >= today.isoformat()]
         if found:
+            used_fallback = True
             print("MIEMU using official prefecture fallback")
 
     if not found:
@@ -205,6 +207,12 @@ def main():
         "hold": sum(e.get("decision") == "hold" for e in merged),
         "exclude": sum(e.get("decision") == "exclude" for e in merged),
     }
+    if used_fallback:
+        degraded = meta.setdefault("degraded_sources", {})
+        if primary_error is not None:
+            degraded["三重県総合博物館 MieMu"] = "本体ページ取得失敗のため三重県公式フォールバックを使用"
+        else:
+            degraded["三重県総合博物館 MieMu"] = "本体ページから今後イベントを取得できず三重県公式フォールバックを使用"
     meta.update({
         "updated_at": datetime.now(ZoneInfo("Asia/Tokyo")).isoformat(timespec="minutes"),
         "source_count": len({e.get("source") for e in merged if e.get("source")}),
