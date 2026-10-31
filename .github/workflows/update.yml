@@ -66,6 +66,9 @@ jobs:
           PYTHONPATH=. python tests/test_hamamatsu_kanko.py
           PYTHONPATH=. python tests/test_actcity.py
           PYTHONPATH=. python tests/test_ecopa.py
+          PYTHONPATH=. python tests/test_iwata_kanko.py
+          PYTHONPATH=. python tests/test_kakegawa_kanko.py
+          PYTHONPATH=. python tests/test_fukuroi_kanko.py
 
       - name: Fetch core events
         run: PYTHONPATH=. python src/fetch_events_resilient.py
@@ -162,6 +165,15 @@ jobs:
 
       - name: Add Ecopa major events
         run: PYTHONPATH=. python src/append_ecopa.py
+
+      - name: Add Iwata tourism major events
+        run: PYTHONPATH=. python src/append_iwata_kanko.py
+
+      - name: Add Kakegawa tourism major events
+        run: PYTHONPATH=. python src/append_kakegawa_kanko.py
+
+      - name: Add Fukuroi tourism major events
+        run: PYTHONPATH=. python src/append_fukuroi_kanko.py
 
       - name: Refine borderline events
         run: python src/refine_events.py
