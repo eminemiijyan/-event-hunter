@@ -164,6 +164,17 @@ def restored_source_warnings(meta: dict) -> list[str]:
     return warnings
 
 
+def degraded_source_warnings(meta: dict) -> list[str]:
+    degraded = meta.get("degraded_sources")
+    if not isinstance(degraded, dict):
+        return []
+    warnings = []
+    for source, reason in sorted(degraded.items()):
+        text = str(reason or "一部取得に失敗")
+        warnings.append(f"{source}: {text}")
+    return warnings
+
+
 def _write_quality_warnings(meta: dict, warnings: list[str]) -> None:
     meta["quality_warnings"] = warnings
     META_PATH.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -180,6 +191,7 @@ def main() -> None:
     warnings = sorted(set(
         coverage_warnings(events, reference, today)
         + restored_source_warnings(meta)
+        + degraded_source_warnings(meta)
         + duplicate_warnings(events)
     ))
     _write_quality_warnings(meta, warnings)
