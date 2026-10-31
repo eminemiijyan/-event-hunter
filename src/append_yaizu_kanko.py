@@ -78,6 +78,24 @@ def _month_index(year: int, month: int) -> int:
     return year * 12 + month - 1
 
 
+def _monthly_context(anchor) -> str:
+    direct = _clean(anchor.get_text(" ", strip=True))
+    if MONTH_RE.search(direct) and any(word in direct for word in ("イベント", "行事")):
+        return direct
+
+    node = anchor
+    for _ in range(4):
+        node = getattr(node, "parent", None)
+        if node is None:
+            break
+        text = _clean(node.get_text(" ", strip=True))
+        if len(text) > 300:
+            continue
+        if MONTH_RE.search(text) and any(word in text for word in ("イベント", "行事")):
+            return text
+    return ""
+
+
 def discover_monthly_pages(category_html: str, today: date) -> list[tuple[int, int, str]]:
     soup = BeautifulSoup(category_html, "html.parser")
     current = _month_index(today.year, today.month)
@@ -85,18 +103,18 @@ def discover_monthly_pages(category_html: str, today: date) -> list[tuple[int, i
     out: list[tuple[int, int, str]] = []
     seen: set[str] = set()
     for a in soup.find_all("a", href=True):
-        text = _clean(a.get_text(" ", strip=True))
-        m = MONTH_RE.search(text)
-        if not m or not any(word in text for word in ("イベント", "行事")):
-            continue
-        year, month = int(m.group(1)), int(m.group(2))
-        if not 1 <= month <= 12 or not current <= _month_index(year, month) <= last:
-            continue
         url = urljoin(CATEGORY_URL, a["href"])
         parsed = urlparse(url)
         if parsed.netloc not in ("yaizu.gr.jp", "www.yaizu.gr.jp") or not parsed.path.startswith("/news/"):
             continue
         if url in seen:
+            continue
+        text = _monthly_context(a)
+        m = MONTH_RE.search(text)
+        if not m:
+            continue
+        year, month = int(m.group(1)), int(m.group(2))
+        if not 1 <= month <= 12 or not current <= _month_index(year, month) <= last:
             continue
         seen.add(url)
         out.append((year, month, url))
