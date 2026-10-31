@@ -40,6 +40,7 @@ jobs:
           PYTHONPATH=. python tests/test_oasis21.py
           PYTHONPATH=. python tests/test_portmesse.py
           PYTHONPATH=. python tests/test_moricoro.py
+          PYTHONPATH=. python tests/test_fukiage.py
           PYTHONPATH=. python tests/test_toyohashi.py
           PYTHONPATH=. python tests/test_okazaki.py
           PYTHONPATH=. python tests/test_toyota.py
@@ -94,6 +95,9 @@ jobs:
 
       - name: Add Moricoro Park major events
         run: PYTHONPATH=. python src/append_moricoro.py
+
+      - name: Add Fukiage Hall major events
+        run: PYTHONPATH=. python src/append_fukiage.py
 
       - name: Add Toyohashi major events
         run: PYTHONPATH=. python src/append_toyohashi.py
