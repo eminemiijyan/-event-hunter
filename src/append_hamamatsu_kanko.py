@@ -23,7 +23,7 @@ TARGET_WORDS = (
 )
 EXCLUDE_WORDS = (
     "教室", "講座", "散歩", "観望", "撮影", "ワークショップ", "セミナー", "募集", "フォトコンテスト",
-    "アクトシティ", "エコパ", "宿泊", "キャンペーン", "マスターコース",
+    "アクトシティ", "エコパ", "宿泊", "キャンペーン", "マスターコース", "プラネタリウム",
 )
 
 
@@ -95,7 +95,7 @@ def parse_month_article(page_html: str, year: int, month: int, url: str) -> list
     soup = BeautifulSoup(page_html, "html.parser")
     out: list[dict] = []
     seen: set[tuple[str, str]] = set()
-    for heading in soup.find_all("h3"):
+    for heading in soup.find_all(["h2", "h3"]):
         title = " ".join(heading.get_text(" ", strip=True).split())
         if not title or not _is_target(title):
             continue
@@ -117,11 +117,13 @@ def parse_month_article(page_html: str, year: int, month: int, url: str) -> list
         if key in seen:
             continue
         seen.add(key)
+        venue_match = re.search(r"📍\s*(.+)$", section)
+        venue = venue_match.group(1).strip() if venue_match else "浜松市・浜名湖エリア"
         out.append({
             "title": title,
             "start_date": start.isoformat(),
             "end_date": end.isoformat(),
-            "venue": "浜松市・浜名湖エリア",
+            "venue": venue,
             "prefecture": "静岡県",
             "category": "祭り・季節" if any(w in title for w in ("祭", "まつり", "フェス", "FES", "フェスタ", "花火", "イルミ", "ライトアップ")) else "その他",
             "source": "浜松・浜名湖だいすきネット",
