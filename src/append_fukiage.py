@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup
 from src.append_aichi_now import append_pickups
 
 BASE = "https://www.nipc.or.jp/fukiage"
+HOME_URL = BASE + "/"
 LIST_URL = BASE + "/event/?m={month}&y={year}"
 SITE_DIR = Path(__file__).resolve().parents[1] / "site"
 MONTHS_AHEAD = 6
@@ -140,7 +141,6 @@ def parse_events(page_html: str, page_year: int, source_url: str) -> list[dict]:
             continue
         start, end, title = parsed
 
-        admission = ""
         access = ""
         venue = ""
         for candidate in reversed(lines[max(0, i - 4):i]):
@@ -152,9 +152,14 @@ def parse_events(page_html: str, page_year: int, source_url: str) -> list[dict]:
         if access != "一般" or not venue:
             continue
 
+        range_match = RANGE_RE.match(_clean(line))
+        single_match = SINGLE_RE.match(_clean(line))
+        title_in_line = bool(
+            (range_match and range_match.group("title").strip())
+            or (single_match and single_match.group("title").strip())
+        )
+        start_index = i + 1 if title_in_line else i + 2
         description_parts: list[str] = []
-        title_was_next_line = not RANGE_RE.match(line) or not (RANGE_RE.match(line) and RANGE_RE.match(line).group("title"))
-        start_index = i + 2 if title_was_next_line else i + 1
         for candidate in lines[start_index:min(start_index + 5, len(lines))]:
             if ADMISSION_RE.match(candidate.replace(" ", "")) or RANGE_RE.match(candidate) or SINGLE_RE.match(candidate):
                 break
@@ -195,6 +200,7 @@ def main() -> None:
     found: list[dict] = []
     reachable = 0
     failed_months = 0
+    used_homepage_fallback = False
     for year, month in month_pairs(today):
         url = LIST_URL.format(year=year, month=month)
         try:
@@ -210,9 +216,22 @@ def main() -> None:
         found.extend(future)
 
     if not reachable:
-        print("FUKIAGE skipped: official monthly pages unavailable")
-        return
+        try:
+            home_html = fetch_html(HOME_URL, attempts=1)
+            found = [
+                e for e in parse_events(home_html, today.year, HOME_URL)
+                if e["end_date"] >= today.isoformat()
+            ]
+            used_homepage_fallback = bool(found)
+            if used_homepage_fallback:
+                print("FUKIAGE using official homepage fallback", "targets", len(found))
+        except requests.RequestException as exc:
+            print("FUKIAGE homepage unavailable", type(exc).__name__)
+
     if not found:
+        if not reachable:
+            print("FUKIAGE skipped: official monthly pages and homepage unavailable or unparseable")
+            return
         raise RuntimeError("吹上ホール公式から今後の対象イベントを取得できませんでした。")
 
     before = len(events)
@@ -220,8 +239,13 @@ def main() -> None:
     events_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
 
     counts = {k: sum(e.get("decision") == k for e in merged) for k in ("display", "hold", "exclude")}
+    degradation: list[str] = []
     if failed_months:
-        meta.setdefault("degraded_sources", {})["吹上ホール"] = f"月別ページ {failed_months}/{MONTHS_AHEAD}件取得失敗"
+        degradation.append(f"月別ページ {failed_months}/{MONTHS_AHEAD}件取得失敗")
+    if used_homepage_fallback:
+        degradation.append("月別ページ全滅のため同一公式サイトのトップページを使用")
+    if degradation:
+        meta.setdefault("degraded_sources", {})["吹上ホール"] = " / ".join(degradation)
     meta.update({
         "updated_at": datetime.now(ZoneInfo("Asia/Tokyo")).isoformat(timespec="minutes"),
         "source_count": len({e.get("source") for e in merged if e.get("source")}),
