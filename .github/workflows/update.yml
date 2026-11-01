@@ -51,6 +51,7 @@ jobs:
           PYTHONPATH=. python tests/test_gifu_culture.py
           PYTHONPATH=. python tests/test_gifu_ncc.py
           PYTHONPATH=. python tests/test_gifu_parks.py
+          PYTHONPATH=. python tests/test_seki_kanko.py
           PYTHONPATH=. python tests/test_suzuka.py
           PYTHONPATH=. python tests/test_nagashima.py
           PYTHONPATH=. python tests/test_miemu.py
@@ -129,6 +130,9 @@ jobs:
 
       - name: Add Gifu city major park events
         run: PYTHONPATH=. python src/append_gifu_parks.py
+
+      - name: Add Seki tourism major events
+        run: PYTHONPATH=. python src/append_seki_kanko.py
 
       - name: Add Suzuka Circuit major events
         run: PYTHONPATH=. python src/append_suzuka.py
