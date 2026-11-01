@@ -17,6 +17,7 @@ SOURCE_URL = "https://www.t-messe.or.jp/news_topics/index.html"
 SITE_DIR = Path(__file__).resolve().parents[1] / "site"
 
 HEADING_RE = re.compile(r"^(?P<m>\d{1,2})/(?P<d>\d{1,2})\s+(?P<title>.+)$")
+DATE_ONLY_RE = re.compile(r"^\d{1,2}/\d{1,2}$")
 DATE_RE = re.compile(r"(?:(?P<m>\d{1,2})月)?\s*(?P<d>\d{1,2})日")
 
 TARGET_WORDS = (
@@ -56,6 +57,25 @@ def fetch_html(url: str = SOURCE_URL, attempts: int = 2) -> str:
 
 def _clean(text: str) -> str:
     return " ".join(unicodedata.normalize("NFKC", text).split())
+
+
+def _page_lines(soup: BeautifulSoup) -> list[str]:
+    raw = [_clean(s) for s in soup.stripped_strings if _clean(s)]
+    lines: list[str] = []
+    i = 0
+    while i < len(raw):
+        line = raw[i]
+        # On the live page, linked event titles are split into two text nodes:
+        # "11/21" + "タミヤフェア2026". Rejoin them before heading detection.
+        if DATE_ONLY_RE.fullmatch(line) and i + 1 < len(raw):
+            next_line = raw[i + 1]
+            if next_line and not DATE_ONLY_RE.fullmatch(next_line):
+                lines.append(f"{line} {next_line}")
+                i += 2
+                continue
+        lines.append(line)
+        i += 1
+    return lines
 
 
 def _nearest_year(month: int, day: int, today: date) -> int:
@@ -146,7 +166,7 @@ def _category(title: str, description: str) -> str:
 
 def parse_events(page_html: str, today: date) -> list[dict]:
     soup = BeautifulSoup(page_html, "html.parser")
-    lines = [_clean(s) for s in soup.stripped_strings if _clean(s)]
+    lines = _page_lines(soup)
     heading_indexes: list[tuple[int, str]] = []
     for i, line in enumerate(lines):
         m = HEADING_RE.match(line)
