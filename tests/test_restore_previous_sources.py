@@ -1,5 +1,6 @@
 from datetime import date
 
+from src.normalize_categories import DISPLAY_CATEGORIES, normalize
 from src.restore_previous_sources import restore_missing_required_sources
 
 reference = {
@@ -45,5 +46,21 @@ assert [e["title"] for e in restored_events if e["source"] == "warn-source"] == 
 no_snapshot_events, restored = restore_missing_required_sources(current, [], reference, today)
 assert restored == {}
 assert no_snapshot_events == current
+
+category_events = [
+    {"title": "パンマルシェ", "category": "グルメ", "source": "x", "venue": "x"},
+    {"title": "コミックフロンティア", "category": "展示会・イベント", "source": "アクトシティ浜松", "venue": "x"},
+    {"title": "オペラコンクール", "category": "展示会・イベント", "source": "アクトシティ浜松", "venue": "x"},
+    {"title": "デジタルスタンプラリー", "category": "その他", "source": "x", "venue": "x"},
+]
+normalize(category_events)
+assert category_events[0]["category"] == "グルメ・マーケット"
+assert category_events[1]["category"] == "ゲーム・アニメ"
+assert category_events[2]["category"] == "音楽・舞台"
+assert category_events[3]["category"] == "体験・ファミリー"
+assert category_events[0]["source_category"] == "グルメ"
+assert all(e["category"] in DISPLAY_CATEGORIES for e in category_events)
+normalize(category_events)
+assert category_events[0]["source_category"] == "グルメ"
 
 print("PASS")
