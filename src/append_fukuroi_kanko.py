@@ -17,7 +17,10 @@ LIST_URL = f"{BASE}/news/"
 SITE_DIR = Path(__file__).resolve().parents[1] / "site"
 TARGET_WORDS = (
     "祭", "まつり", "フェス", "FES", "ランタン", "夜市", "花火", "マラソン",
-    "ライトアップ", "イルミ", "もみじ", "風鈴",
+    "ライトアップ", "イルミ", "もみじ", "風鈴", "マルシェ", "だんご",
+)
+CONTEXT_WORDS = (
+    "サイクルトレイン",
 )
 EXCLUDE_WORDS = (
     "出店します", "開催しました", "募集", "キャンペーン", "エコパ", "運行", "お越しの皆さま",
@@ -59,6 +62,10 @@ def _is_target(title: str) -> bool:
     return any(w.casefold() in title.casefold() for w in TARGET_WORDS)
 
 
+def _is_context_article(title: str) -> bool:
+    return any(word.casefold() in title.casefold() for word in CONTEXT_WORDS)
+
+
 def discover_articles(page_html: str) -> list[tuple[str, str]]:
     soup = BeautifulSoup(page_html, "html.parser")
     out: list[tuple[str, str]] = []
@@ -73,7 +80,7 @@ def discover_articles(page_html: str) -> list[tuple[str, str]]:
         text = unicodedata.normalize("NFKC", " ".join(a.get_text(" ", strip=True).split()))
         m = LIST_TEXT_RE.match(text)
         title = (m.group(1) if m else text).strip()
-        if not title or not _is_target(title) or url in seen:
+        if not title or (not _is_target(title) and not _is_context_article(title)) or url in seen:
             continue
         seen.add(url)
         out.append((title, url))
@@ -138,6 +145,40 @@ def parse_detail_venue(page_html: str) -> str | None:
     return None
 
 
+def discover_embedded_events(page_html: str, today: date) -> list[tuple[str, date, date, str]]:
+    soup = BeautifulSoup(page_html, "html.parser")
+    text = unicodedata.normalize("NFKC", soup.get_text("\n", strip=True))
+    anchor = re.search(
+        r"(?:(20\d{2})年)?\s*(\d{1,2})月\s*(\d{1,2})日[^。\n]{0,50}?開催される「([^」]+)」",
+        text,
+    )
+    if not anchor:
+        return []
+
+    year = int(anchor.group(1)) if anchor.group(1) else _event_year(int(anchor.group(2)), today)
+    try:
+        event_date = date(year, int(anchor.group(2)), int(anchor.group(3)))
+    except ValueError:
+        return []
+
+    events: list[tuple[str, date, date, str]] = []
+    seen: set[str] = set()
+    for quoted in re.findall(r"「([^」]{2,80})」", text):
+        title = " ".join(quoted.split()).strip()
+        if not _is_target(title) or _norm(title) in seen:
+            continue
+        seen.add(_norm(title))
+        venue = "袋井市"
+        venue_match = re.search(
+            rf"([^\s、。]{{2,20}}?)(?:で|では)(?:[^「」]{{0,40}})「{re.escape(quoted)}」",
+            text,
+        )
+        if venue_match:
+            venue = venue_match.group(1).strip(" ・、。")
+        events.append((title, event_date, event_date, venue))
+    return events
+
+
 def category_for(title: str) -> str:
     if "花火" in title:
         return "花火"
@@ -151,6 +192,21 @@ def _same_event(existing: dict, candidate: dict) -> bool:
         return False
     a, b = _norm(existing.get("title", "")), _norm(candidate.get("title", ""))
     return bool(a and b and (a == b or a in b or b in a))
+
+
+def _event_record(title: str, start: date, end: date, venue: str, url: str, reason: str) -> dict:
+    return {
+        "title": title,
+        "start_date": start.isoformat(),
+        "end_date": end.isoformat(),
+        "venue": venue,
+        "prefecture": "静岡県",
+        "category": category_for(title),
+        "source": "袋井市観光協会",
+        "official_url": url,
+        "decision": "display",
+        "decision_reason": reason,
+    }
 
 
 def main():
@@ -175,24 +231,34 @@ def main():
         except requests.RequestException:
             failed_details += 1
             continue
+
+        for embedded_title, start, end, venue in discover_embedded_events(detail, today):
+            if end >= today:
+                found.append(_event_record(
+                    embedded_title,
+                    start,
+                    end,
+                    venue,
+                    url,
+                    "袋井市観光協会公式ニュース本文でイベント名と開催日を確認",
+                ))
+
+        if not _is_target(title):
+            continue
         dates = parse_detail_dates(detail, today)
         if dates is None:
             continue
         start, end = dates
         if end < today:
             continue
-        found.append({
-            "title": title,
-            "start_date": start.isoformat(),
-            "end_date": end.isoformat(),
-            "venue": parse_detail_venue(detail) or "袋井市",
-            "prefecture": "静岡県",
-            "category": category_for(title),
-            "source": "袋井市観光協会",
-            "official_url": url,
-            "decision": "display",
-            "decision_reason": "袋井市観光協会公式ニュースから主要な祭・フェス・季節イベントを抽出し詳細ページの日付を確認",
-        })
+        found.append(_event_record(
+            title,
+            start,
+            end,
+            parse_detail_venue(detail) or "袋井市",
+            url,
+            "袋井市観光協会公式ニュースから主要な祭・フェス・季節イベントを抽出し詳細ページの日付を確認",
+        ))
 
     unique: dict[tuple[str, str], dict] = {}
     for item in found:
