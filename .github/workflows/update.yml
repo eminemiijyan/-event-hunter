@@ -56,6 +56,7 @@ jobs:
           PYTHONPATH=. python tests/test_kakamigahara_parks.py
           PYTHONPATH=. python tests/test_minokamo_kanko.py
           PYTHONPATH=. python tests/test_kani_city.py
+          PYTHONPATH=. python tests/test_seino_suitrip.py
           PYTHONPATH=. python tests/test_suzuka.py
           PYTHONPATH=. python tests/test_nagashima.py
           PYTHONPATH=. python tests/test_miemu.py
@@ -146,6 +147,9 @@ jobs:
 
       - name: Add Kani city major events
         run: PYTHONPATH=. python src/append_kani_city.py
+
+      - name: Add West Gifu Suitrip events
+        run: PYTHONPATH=. python src/append_seino_suitrip.py
 
       - name: Add Suzuka Circuit major events
         run: PYTHONPATH=. python src/append_suzuka.py
