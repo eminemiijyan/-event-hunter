@@ -15,9 +15,11 @@ button.active{background:#111;color:white;border-color:#111}
 main{max-width:760px;margin:auto;padding:12px 12px 80px}.status{font-size:13px;color:#666;margin:6px 2px 12px}
 .quality-warning{font-size:13px;line-height:1.45;background:#fff3cd;border:1px solid #f0d98a;border-radius:12px;padding:10px 12px;margin:0 0 12px}
 .card{display:block;background:white;border-radius:16px;padding:14px 15px;margin:10px 0;text-decoration:none;color:inherit;box-shadow:0 1px 4px rgba(0,0,0,.08)}
-.card.hold{opacity:.8}.date{font-size:13px;font-weight:700;margin-bottom:7px}.title{font-size:18px;font-weight:750;line-height:1.35}
+.card.hold{opacity:.8}.date-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px}.date{font-size:13px;font-weight:700}.title{font-size:18px;font-weight:750;line-height:1.35}
 .meta{margin-top:8px;font-size:14px;color:#555;line-height:1.5}.tag{display:inline-block;margin-top:9px;margin-right:5px;background:#eee;border-radius:999px;padding:4px 9px;font-size:12px}
-.tag.hold{background:#fff3cd}.empty{text-align:center;color:#777;padding:44px 8px}footer{color:#777;font-size:12px;text-align:center;padding:20px}
+.tag.hold{background:#fff3cd}.category-tag{display:inline-block;border-radius:999px;padding:3px 8px;font-size:11px;font-weight:700;line-height:1.2}
+.cat-food{background:#fff0d8;color:#8a4b00}.cat-game{background:#f0e8ff;color:#5c2a9d}.cat-music{background:#ffe6f0;color:#9a2d5b}.cat-exhibit{background:#e7f0ff;color:#245aa8}.cat-sports{background:#e6f5e9;color:#236b36}.cat-festival{background:#ffe8e2;color:#a33a20}.cat-business{background:#e9eef3;color:#44515e}.cat-family{background:#e5f7f4;color:#126b60}.cat-other{background:#eee;color:#555}
+.empty{text-align:center;color:#777;padding:44px 8px}footer{color:#777;font-size:12px;text-align:center;padding:20px}
 </style>
 </head>
 <body>
@@ -75,6 +77,19 @@ function visible(e){
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
+function categoryClass(category){
+  return ({
+    "グルメ・マーケット":"cat-food",
+    "ゲーム・アニメ":"cat-game",
+    "音楽・舞台":"cat-music",
+    "展示・博覧会":"cat-exhibit",
+    "スポーツ":"cat-sports",
+    "祭り・季節":"cat-festival",
+    "セミナー・ビジネス":"cat-business",
+    "体験・ファミリー":"cat-family",
+    "その他":"cat-other"
+  })[category]||"cat-other";
+}
 function render(){
   const list=allEvents.filter(visible).sort((a,b)=>a.start_date.localeCompare(b.start_date)||a.title.localeCompare(b.title));
   const held=allEvents.filter(e=>e.decision==="hold").length;
@@ -84,10 +99,10 @@ function render(){
     const eventDate=e.start_date===e.end_date?fmt(e.start_date):`${fmt(e.start_date)}〜${fmt(e.end_date)}`;
     const holdTag=e.decision==="hold"?`<span class="tag hold" title="${escapeHtml(e.decision_reason||"")}">保留</span>`:"";
     return `<a class="card ${e.decision==="hold"?"hold":""}" href="${escapeHtml(e.official_url)}" target="_blank" rel="noopener">
-      <div class="date">${eventDate}</div>
+      <div class="date-row"><div class="date">${eventDate}</div><span class="category-tag ${categoryClass(e.category)}">${escapeHtml(e.category)}</span></div>
       <div class="title">${escapeHtml(e.title)}</div>
       <div class="meta">${escapeHtml(e.venue)}<br>${escapeHtml(e.prefecture)} / ${escapeHtml(e.source)}</div>
-      <span class="tag">${escapeHtml(e.category)}</span>${holdTag}
+      ${holdTag}
     </a>`;
   }).join(""):`<div class="empty">該当イベントはありません</div>`;
 }
