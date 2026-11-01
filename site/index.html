@@ -8,10 +8,13 @@
 <style>
 :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#111;background:#f5f5f7}
 *{box-sizing:border-box} body{margin:0}
-header{position:sticky;top:0;z-index:10;background:rgba(245,245,247,.94);backdrop-filter:blur(16px);padding:16px 14px 10px;border-bottom:1px solid #ddd}
-h1{font-size:22px;margin:0 0 10px}.controls{display:flex;gap:8px;overflow-x:auto;padding-bottom:3px}
-button{border:1px solid #ccc;background:white;border-radius:999px;padding:8px 13px;white-space:nowrap;font-size:14px}
+header{position:sticky;top:0;z-index:10;background:rgba(245,245,247,.96);backdrop-filter:blur(16px);padding:10px 12px 8px;border-bottom:1px solid #ddd}
+h1{font-size:20px;margin:0 0 7px}.controls{display:flex;gap:7px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}.controls::-webkit-scrollbar{display:none}
+button{border:1px solid #ccc;background:white;border-radius:999px;padding:7px 12px;white-space:nowrap;font-size:13px}
 button.active{background:#111;color:white;border-color:#111}
+#toolbar{margin-top:6px}#filter-toggle.has-filter{border-color:#777;font-weight:700}
+.filter-panel{display:none;position:absolute;left:0;right:0;top:100%;background:rgba(250,250,251,.98);backdrop-filter:blur(18px);border-bottom:1px solid #ccc;box-shadow:0 8px 16px rgba(0,0,0,.10);padding:10px 12px 12px}
+.filter-panel.open{display:block}.filter-label{font-size:12px;font-weight:700;color:#666;margin:0 0 5px}.filter-label.category{margin-top:9px}
 main{max-width:760px;margin:auto;padding:12px 12px 80px}.status{font-size:13px;color:#666;margin:6px 2px 12px}
 .quality-warning{font-size:13px;line-height:1.45;background:#fff3cd;border:1px solid #f0d98a;border-radius:12px;padding:10px 12px;margin:0 0 12px}
 .card{display:block;background:white;border-radius:16px;padding:14px 15px;margin:10px 0;text-decoration:none;color:inherit;box-shadow:0 1px 4px rgba(0,0,0,.08)}
@@ -25,17 +28,22 @@ main{max-width:760px;margin:auto;padding:12px 12px 80px}.status{font-size:13px;c
 <body>
 <header>
   <h1>Event Hunter</h1>
-  <div class="controls" id="decision">
-    <button data-decision="display" class="active">おすすめ</button>
-    <button data-decision="review">保留も見る</button>
-  </div>
-  <div class="controls" id="period" style="margin-top:8px">
+  <div class="controls" id="period">
     <button data-period="weekend" class="active">今週末</button>
     <button data-period="30">30日</button>
     <button data-period="all">すべて</button>
   </div>
-  <div class="controls" id="prefectures" style="margin-top:8px"></div>
-  <div class="controls" id="categories" style="margin-top:8px"></div>
+  <div class="controls" id="toolbar">
+    <button data-decision="display" class="active">おすすめ</button>
+    <button data-decision="review">保留も見る</button>
+    <button id="filter-toggle" type="button" aria-expanded="false">絞り込み</button>
+  </div>
+  <div class="filter-panel" id="filter-panel">
+    <div class="filter-label">地域</div>
+    <div class="controls" id="prefectures"></div>
+    <div class="filter-label category">カテゴリ</div>
+    <div class="controls" id="categories"></div>
+  </div>
 </header>
 <main>
   <div class="status" id="status">読み込み中…</div>
@@ -90,6 +98,14 @@ function categoryClass(category){
     "その他":"cat-other"
   })[category]||"cat-other";
 }
+function updateFilterToggle(){
+  const toggle=document.querySelector("#filter-toggle");
+  const count=(prefecture!=="すべて"?1:0)+(category!=="すべて"?1:0);
+  const open=document.querySelector("#filter-panel").classList.contains("open");
+  toggle.textContent=`絞り込み${count?` (${count})`:""}${open?" ▲":""}`;
+  toggle.classList.toggle("has-filter",count>0);
+  toggle.setAttribute("aria-expanded",open?"true":"false");
+}
 function render(){
   const list=allEvents.filter(visible).sort((a,b)=>a.start_date.localeCompare(b.start_date)||a.title.localeCompare(b.title));
   const held=allEvents.filter(e=>e.decision==="hold").length;
@@ -124,6 +140,7 @@ async function init(){
     if(!e.target.dataset.pref)return;
     prefecture=e.target.dataset.pref;
     [...pbox.children].forEach(b=>b.classList.toggle("active",b.dataset.pref===prefecture));
+    updateFilterToggle();
     render();
   };
 
@@ -134,6 +151,7 @@ async function init(){
     if(!e.target.dataset.cat)return;
     category=e.target.dataset.cat;
     [...cbox.children].forEach(b=>b.classList.toggle("active",b.dataset.cat===category));
+    updateFilterToggle();
     render();
   };
   document.querySelector("#period").onclick=e=>{
@@ -142,14 +160,20 @@ async function init(){
     [...document.querySelector("#period").children].forEach(b=>b.classList.toggle("active",b.dataset.period===period));
     render();
   };
-  document.querySelector("#decision").onclick=e=>{
+  document.querySelector("#toolbar").onclick=e=>{
+    if(e.target.id==="filter-toggle"){
+      document.querySelector("#filter-panel").classList.toggle("open");
+      updateFilterToggle();
+      return;
+    }
     if(!e.target.dataset.decision)return;
     decisionMode=e.target.dataset.decision;
-    [...document.querySelector("#decision").children].forEach(b=>b.classList.toggle("active",b.dataset.decision===decisionMode));
+    [...document.querySelectorAll("#toolbar [data-decision]")].forEach(b=>b.classList.toggle("active",b.dataset.decision===decisionMode));
     render();
   };
   const counts=m.decision_counts||{};
   document.querySelector("#footer").textContent=`最終更新 ${m.updated_at} / 情報源 ${m.source_count} / おすすめ ${counts.display??"-"}・保留 ${counts.hold??"-"}・除外 ${counts.exclude??"-"}`;
+  updateFilterToggle();
   render();
 }
 init().catch(err=>{
