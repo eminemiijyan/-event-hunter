@@ -20,8 +20,7 @@ MAJOR_WORDS = (
     "多文化交流", "トレイル", "祭", "まつり", "花火", "キャンプ場", "縁日",
 )
 SMALL_WORDS = ("体験", "教室", "ヨガ", "病院", "撮影会", "スワッグ", "収穫", "ミニゲーム")
-DATE_RE = re.compile(r"(?:(20\d{2})年)?\s*(\d{1,2})月\s*(\d{1,2})日")
-MD_RE = re.compile(r"(?<!\d)(\d{1,2})月\s*(\d{1,2})日")
+DATE_TOKEN_RE = re.compile(r"(?:(20\d{2})年\s*)?(?:(\d{1,2})月\s*)?(\d{1,2})日")
 
 
 def fetch_html(attempts: int = 3) -> str:
@@ -55,22 +54,26 @@ def _norm(text: str) -> str:
 
 def parse_period(text: str, base_year: int) -> tuple[str, str] | None:
     text = _clean(text)
-    explicit = [(int(y), int(m), int(d)) for y, m, d in DATE_RE.findall(text) if y]
     values: list[date] = []
-    if explicit:
-        for y, m, d in explicit:
-            try: values.append(date(y, m, d))
-            except ValueError: pass
-    else:
-        pairs = [(int(m), int(d)) for m, d in MD_RE.findall(text)]
-        year = base_year
-        prev_month: int | None = None
-        for month, day in pairs:
-            if prev_month is not None and month < prev_month and prev_month >= 10 and month <= 3:
+    year = base_year
+    month: int | None = None
+    prev_month: int | None = None
+    for match in DATE_TOKEN_RE.finditer(text):
+        year_token, month_token, day_token = match.groups()
+        if year_token:
+            year = int(year_token)
+        if month_token:
+            new_month = int(month_token)
+            if not year_token and prev_month is not None and new_month < prev_month and prev_month >= 10 and new_month <= 3:
                 year += 1
-            try: values.append(date(year, month, day))
-            except ValueError: pass
-            prev_month = month
+            month = new_month
+            prev_month = new_month
+        if month is None:
+            continue
+        try:
+            values.append(date(year, month, int(day_token)))
+        except ValueError:
+            continue
     if not values:
         return None
     return min(values).isoformat(), max(values).isoformat()
