@@ -71,6 +71,7 @@ jobs:
           PYTHONPATH=. python tests/test_kakegawa_kanko.py
           PYTHONPATH=. python tests/test_fukuroi_kanko.py
           PYTHONPATH=. python tests/test_shizuoka_city.py
+          PYTHONPATH=. python tests/test_twinmesse.py
           PYTHONPATH=. python tests/test_yaizu_kanko.py
           PYTHONPATH=. python tests/test_publish_quality.py
           PYTHONPATH=. python tests/test_restore_previous_sources.py
@@ -188,6 +189,9 @@ jobs:
 
       - name: Add Shizuoka City major events
         run: PYTHONPATH=. python src/append_shizuoka_city.py
+
+      - name: Add Twin Messe Shizuoka major events
+        run: PYTHONPATH=. python src/append_twinmesse.py
 
       - name: Add Yaizu tourism major events
         run: PYTHONPATH=. python src/append_yaizu_kanko.py
