@@ -5,6 +5,8 @@ from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from src.normalize_categories import normalize
+
 ROOT = Path(__file__).resolve().parents[1]
 EVENTS_PATH = ROOT / "site" / "events.json"
 META_PATH = ROOT / "site" / "meta.json"
@@ -77,8 +79,10 @@ def main() -> None:
         previous_events = []
 
     events, restored = restore_missing_required_sources(current_events, previous_events, reference, today)
+    events = normalize(events)
+    EVENTS_PATH.write_text(json.dumps(events, ensure_ascii=False, indent=2), encoding="utf-8")
+
     if restored:
-        EVENTS_PATH.write_text(json.dumps(events, ensure_ascii=False, indent=2), encoding="utf-8")
         meta = json.loads(META_PATH.read_text(encoding="utf-8"))
         counts = {k: sum(e.get("decision") == k for e in events) for k in ("display", "hold", "exclude")}
         meta.update({
