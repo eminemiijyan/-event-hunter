@@ -140,6 +140,7 @@ async function init(){
     if(!e.target.dataset.pref)return;
     prefecture=e.target.dataset.pref;
     [...pbox.children].forEach(b=>b.classList.toggle("active",b.dataset.pref===prefecture));
+    document.querySelector("#filter-panel").classList.remove("open");
     updateFilterToggle();
     render();
   };
@@ -151,6 +152,7 @@ async function init(){
     if(!e.target.dataset.cat)return;
     category=e.target.dataset.cat;
     [...cbox.children].forEach(b=>b.classList.toggle("active",b.dataset.cat===category));
+    document.querySelector("#filter-panel").classList.remove("open");
     updateFilterToggle();
     render();
   };
